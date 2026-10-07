@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parametric 2D to 3D Morph</title>
+  <style>
+    /* 1. Global Reset */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+  
+    html, body {
+      width: 100%;
+      min-height: 300vh; /* Guarantees scroll height across all browsers */
+      background: #0f0f11;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      /* Prevents horizontal overflow caused by 100vw */
+      overflow-x: hidden; 
+      -webkit-text-size-adjust: 100%;
+      -moz-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  
+    /* 2. Fixed Canvas Layer */
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;  /* Use 100% instead of 100vw to avoid scrollbar calculation bugs */
+      height: 100vh;
+      z-index: 1;
+      pointer-events: none; /* Allows scroll wheel events to pass right through */
+    }
+  
+    #canvas-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+  
+    /* 3. Typography & Section Spacing */
+    .section {
+      position: relative;
+      z-index: 2;
+      height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none; /* Crucial: stops text container from blocking scroll */
+    }
+  
+    /* 2. Lock explicit line-height and font sizing on the h1 tags */
+    .section h1 {
+  /* Force sans-serif fallback so Edge doesn't apply system-ui font scaling */
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  
+  /* Ensure Edge respects fixed bounds */
+  max-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+  background: rgba(20, 20, 23, 0.75);
+  padding: 12px 24px;
+  border-radius: 9999px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+  </style>
+
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <section class="content"><h1>01 / 2D Harmonic Spline</h1></section>
+  <section class="content"><h1>02 / Extruding Depth</h1></section>
+  <section class="content"><h1>03 / 3D Spatial Geometry</h1></section>
+
+  <script type="module" src="src/main.ts"></script>
+</body>
+</html>
