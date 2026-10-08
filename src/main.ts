@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 
 // 1. Scene & Camera Setup
 const container = document.getElementById('canvas-container') as HTMLDivElement | null;
@@ -88,28 +92,35 @@ wireframeMesh.scale.set(1.002, 1.002, 1.002);
 wireframeMesh.position.z = 0.005;
 scene.add(wireframeMesh);
 
-// 5. Scroll Tracking
-let targetT = 0;
-let currentT = 0;
+// 5. Scroll-jacked pinning (GSAP ScrollTrigger)
+let scrollProgress = 0;
 
-function getScrollProgress(): number {
-  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-  return maxScroll > 0 ? Math.min(Math.max(window.scrollY / maxScroll, 0), 1) : 0;
-}
+const parametricSection = document.querySelector('.parametric-section') as HTMLElement | null;
+const stickyContainer = document.querySelector('.sticky-container') as HTMLElement | null;
 
-window.addEventListener('scroll', () => {
-  targetT = getScrollProgress();
-});
+if (parametricSection && stickyContainer) {
+  ScrollTrigger.create({
+    trigger: parametricSection,
+    start: 'top top',
+    end: 'bottom bottom',
+    pin: stickyContainer,
+    pinSpacing: true,
+    scrub: true,
+    anticipatePin: 1,
+    invalidateOnRefresh: true,
+    onUpdate: (self) => {
+      scrollProgress = self.progress;
+    },
+  });
 
-function lerp(start: number, end: number, factor: number): number {
-  return start + (end - start) * factor;
+  ScrollTrigger.refresh();
 }
 
 // 6. Clean, Single-Loop Animation
 function animate(): void {
   requestAnimationFrame(animate);
 
-  currentT = lerp(currentT, targetT, 0.08);
+  const t = scrollProgress;
 
   const currentPositions = positionAttribute.array as Float32Array;
 
@@ -118,11 +129,11 @@ function animate(): void {
     const x = originalPositions[i];
     const y = originalPositions[i + 1];
 
-    const primaryWave = Math.sin(x * 1.5 + currentT * Math.PI * 2) * 0.7;
-    const secondaryWave = Math.cos(y * 2.5 + currentT * Math.PI) * 0.35;
-    const microRipple = Math.sin((x + y) * 3 + currentT * Math.PI * 3) * 0.15;
+    const primaryWave = Math.sin(x * 1.5 + t * Math.PI * 2) * 0.7;
+    const secondaryWave = Math.cos(y * 2.5 + t * Math.PI) * 0.35;
+    const microRipple = Math.sin((x + y) * 3 + t * Math.PI * 3) * 0.15;
 
-    currentPositions[i + 2] = (primaryWave + secondaryWave + microRipple) * currentT;
+    currentPositions[i + 2] = (primaryWave + secondaryWave + microRipple) * t;
   }
 
   // Updating the single shared attribute deforms both meshes at once
@@ -130,8 +141,8 @@ function animate(): void {
   geometry.computeVertexNormals();
 
   // Sync Rotations
-  const tiltX = currentT * 0.75;
-  const tiltY = currentT * 0.35;
+  const tiltX = t * 0.75;
+  const tiltY = t * 0.35;
 
   solidMesh.rotation.x = tiltX;
   solidMesh.rotation.y = tiltY;
@@ -139,8 +150,8 @@ function animate(): void {
   wireframeMesh.rotation.y = tiltY;
 
   // Orbit key light
-  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2;
-  keyLight.position.y = 8 + Math.cos(currentT * Math.PI) * 2;
+  keyLight.position.x = 6 + Math.sin(t * Math.PI) * 2;
+  keyLight.position.y = 8 + Math.cos(t * Math.PI) * 2;
 
   renderer.render(scene, camera);
 }
@@ -153,4 +164,5 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  ScrollTrigger.refresh();
 });

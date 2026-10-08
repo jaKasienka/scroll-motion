@@ -14,7 +14,6 @@
   
     html, body {
       width: 100%;
-      min-height: 300vh; /* Guarantees scroll height across all browsers */
       background: #0f0f11;
       color: #ffffff;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -25,26 +24,47 @@
       text-size-adjust: 100%;
     }
   
-    /* 2. Fixed Canvas Layer */
+    /* 2. Outer Scroll Track */
+    .parametric-section {
+      position: relative;
+      height: 300vh; /* Gives 3 screens of scroll distance while pinned */
+      width: 100%;
+    }
+
+    /* 3. Pinned viewport (GSAP ScrollTrigger applies fixed positioning while active) */
+    .sticky-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* 4. Canvas Base Layer */
     #canvas-container {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
-      width: 100%;  /* Use 100% instead of 100vw to avoid scrollbar calculation bugs */
-      height: 100vh;
+      width: 100%;
+      height: 100%;
       z-index: 1;
-      pointer-events: none; /* Allows scroll wheel events to pass right through */
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
   
-    #canvas-container canvas {
-    width: 100% !important;
-    height: 100% !important;
-    display: block;
-    image-rendering: -webkit-crisp-edges;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
-  }
-  
+    /* 5. Overlay Heading (Pinned on top of canvas) */
+    .hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2; /* Sits above WebGL canvas */
+      pointer-events: none; /* Allows scrolling & interaction to pass through */
+      padding: 4rem 2rem; /* Match .next-section so title aligns with h2 */
+      text-align: left;
+    }
+
     /* 3. Typography & Section Spacing */
     .section {
       position: relative;
@@ -59,38 +79,71 @@
   
     /* 2. Lock explicit line-height and font sizing on the h1 tags */
     .section h1 {
-  /* Force sans-serif fallback so Edge doesn't apply system-ui font scaling */
-  font-family: Arial, Helvetica, sans-serif !important;
-  font-size: 16px !important;
-  line-height: 1 !important;
-  
-  /* Ensure Edge respects fixed bounds */
-  max-height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+      /* Force sans-serif fallback so Edge doesn't apply system-ui font scaling */
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 16px !important;
+      line-height: 1 !important;
+      
+      /* Ensure Edge respects fixed bounds */
+      max-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
 
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #e2e8f0;
-  background: rgba(20, 20, 23, 0.75);
-  padding: 12px 24px;
-  border-radius: 9999px;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  white-space: nowrap;
-}
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e2e8f0;
+      background: rgba(20, 20, 23, 0.75);
+      padding: 12px 24px;
+      border-radius: 9999px;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      white-space: nowrap;
+    }
+
+    .section-title {
+      color: #ffffff;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    /* 6. Next Section */
+    .next-section {
+      position: relative;
+      z-index: 3;
+      min-height: 100vh;
+      background-color: #0f172a;
+      color: #ffffff;
+      padding: 4rem 2rem;
+    }
+    
   </style>
 
 </head>
 <body>
-  <div id="canvas-container"></div>
+  <!-- The 300vh outer section creates the scroll track -->
+  <section class="parametric-section">
+    <!-- Everything inside sticky-container stays pinned to the screen -->
+    <div class="sticky-container">
+      <div id="canvas-container"></div>
+      
+      <!-- Heading stays pinned over the 3D canvas -->
+      <div class="hero-overlay">
+        <h1 class="section-title">Parametric Surface</h1>
+      </div>
+    </div>
+  </section>
 
-  <section class="content"><h1>01 / 2D Harmonic Spline</h1></section>
-  <section class="content"><h1>02 / Extruding Depth</h1></section>
-  <section class="content"><h1>03 / 3D Spatial Geometry</h1></section>
+  <!-- Next section scrolls up only AFTER the 3D morph completes -->
+  <section class="next-section">
+    <h2>Next Section Content</h2>
+  </section>
 
   <script type="module" src="src/main.ts"></script>
 </body>
