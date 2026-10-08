@@ -58,6 +58,7 @@ scene.add(glowMesh);
 
 // 4. Hybrid Mesh Setup (Solid Surface + Wireframe Contour)
 // A. Solid Smooth Surface for Realistic Shading & Specular Catching
+// 4. Solid Phong Surface
 const solidMaterial = new THREE.MeshPhongMaterial({
   color: 0x064e3b,        // Rich emerald base
   emissive: 0x022c22,     // Warm ambient glow
@@ -65,12 +66,27 @@ const solidMaterial = new THREE.MeshPhongMaterial({
   shininess: 50,          // Satiny sheen
   transparent: true,
   opacity: 0.90,
-  side: THREE.DoubleSide
+  side: THREE.DoubleSide,
+  // Push the solid mesh depth slightly back to resolve Z-fighting
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1
 });
 
 const solidMesh = new THREE.Mesh(geometry, solidMaterial);
 scene.add(solidMesh);
 
+/* Methodology:
+I used the MeshPhongMaterial to create a smooth, shiny surface with a slight translucency.
+I then used the MeshBasicMaterial to create a wireframe overlay that follows the same deformation as the solid mesh.
+I then used the MeshShadowMaterial to create a soft shadow beneath the mesh.
+I then used the MeshStandardMaterial to create a physical material that follows the same deformation as the solid mesh.
+I then used the MeshPhysicalMaterial to create a physical material that follows the same deformation as the solid mesh.
+I then used the MeshPhysicalMaterial to create a physical material that follows the same deformation as the solid mesh.
+ */
+
+// This is the physical material that follows the same deformation as the solid mesh.
+// It's better used in a more defined scene with more light sources and a more defined geometry.
 /* const physicalMaterial = new THREE.MeshPhysicalMaterial({
   color: 0x064e3b,             // Deep emerald
   transmission: 0.85,          // High light pass-through
@@ -93,11 +109,17 @@ const wireframeMaterial = new THREE.MeshBasicMaterial({
   color: 0xa7f3d0,
   wireframe: true,
   transparent: true,
-  opacity: 0.25,          // Soft outline contrast
-  side: THREE.DoubleSide
+  opacity: 0.25,
+  side: THREE.FrontSide, // Render only front faces to stop back-line bleed
+  depthWrite: true       // Forces explicit front-to-back sorting
 });
 
 const wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
+
+// Micro-scale & position offset to completely eliminate Z-fighting
+wireframeMesh.scale.set(1.002, 1.002, 1.002);
+wireframeMesh.position.z = 0.008; // Micro-offset to resolve Z-fighting
+
 scene.add(wireframeMesh);
 
 // Add a soft ground floor plane beneath the wave
