@@ -113,6 +113,33 @@
       text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
 
+    .site-nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 10;
+      display: flex;
+      gap: 1.25rem;
+      padding: 4rem 2rem;
+      pointer-events: auto;
+    }
+
+    .site-nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.875rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .site-nav a:hover {
+      color: #f8fafc;
+    }
+
+    .site-nav a[aria-current="page"] {
+      color: #34d399;
+    }
+
     /* 6. Next Section */
     .next-section {
       position: relative;
@@ -127,6 +154,11 @@
 
 </head>
 <body>
+  <nav class="site-nav" aria-label="Site">
+    <a href="/index.html" aria-current="page">Morph</a>
+    <a href="/lab.html">Lab</a>
+  </nav>
+
   <!-- The 300vh outer section creates the scroll track -->
   <section class="parametric-section">
     <!-- Everything inside sticky-container stays pinned to the screen -->

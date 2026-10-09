@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device Relief · Scroll Lab</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      background: #242428;
+      color: #e8e8ec;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+      -webkit-text-size-adjust: 100%;
+      -moz-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    .site-nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      pointer-events: auto;
+    }
+
+    .site-nav a {
+      color: #9ca3af;
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .site-nav a:hover { color: #f4f4f5; }
+    .site-nav a[aria-current="page"] { color: #d4d4d8; }
+
+    .device-section {
+      position: relative;
+      height: 820vh;
+      width: 100%;
+    }
+
+    .device-pin {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #lab-canvas {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    #lab-canvas canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .scroll-tail {
+      min-height: 40vh;
+      background: #242428;
+    }
+  </style>
+</head>
+<body>
+  <nav class="site-nav" aria-label="Site">
+    <a href="/index.html">Morph</a>
+    <a href="/lab.html" aria-current="page">Lab</a>
+  </nav>
+
+  <section class="device-section">
+    <div class="device-pin">
+      <div id="lab-canvas"></div>
+    </div>
+  </section>
+
+  <div class="scroll-tail" aria-hidden="true"></div>
+
+  <script type="module" src="/src/lab.ts"></script>
+</body>
+</html>
