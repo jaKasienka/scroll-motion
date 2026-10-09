@@ -9,7 +9,9 @@ const DEVICE_H = 4.8;
 const DEVICE_D = 0.38;
 const CORNER_R = 0.52;
 
-const WHITE = 0xffffff;
+const BLACK = 0x0e0e12;
+const BLACK_CTA = 0x18181e;
+const BLACK_MEMBRANE = 0x0c0c10;
 
 const container = document.getElementById('lab-canvas') as HTMLDivElement | null;
 if (!container) throw new Error('lab-canvas element missing');
@@ -43,35 +45,48 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.62);
+const ambient = new THREE.AmbientLight(0xffffff, 0.45);
 scene.add(ambient);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0xe4e4e7, 0.55);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x1e1e24, 0.7);
 scene.add(hemi);
 
-const key = new THREE.DirectionalLight(0xffffff, 1.35);
-key.position.set(4, 6, 8);
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(5, 7, 7);
 key.castShadow = true;
 key.shadow.mapSize.set(1024, 1024);
 key.shadow.bias = -0.0002;
 scene.add(key);
 
-const fill = new THREE.DirectionalLight(0xffffff, 0.55);
-fill.position.set(-5, -2, 4);
+const fill = new THREE.DirectionalLight(0xa1a1aa, 0.9);
+fill.position.set(-6, -2, 5);
 scene.add(fill);
 
-function glossyWhite(): THREE.MeshPhysicalMaterial {
+const rimLight = new THREE.DirectionalLight(0xffffff, 2.8);
+rimLight.position.set(-5, 6, -3);
+scene.add(rimLight);
+
+const frontSpec = new THREE.DirectionalLight(0xffffff, 1.2);
+frontSpec.position.set(0, 0, 8);
+scene.add(frontSpec);
+
+function glossyBlack(
+  color = BLACK,
+  roughness = 0.14,
+  metalness = 0.18
+): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
-    color: WHITE,
-    roughness: 0.1,
-    metalness: 0.22,
-    clearcoat: 1,
+    color,
+    roughness,
+    metalness,
+    clearcoat: 1.0,
     clearcoatRoughness: 0.05,
+    reflectivity: 0.95,
   });
 }
 
-const bodyMat = glossyWhite();
-const ctaMat = glossyWhite();
+const bodyMat = glossyBlack(BLACK, 0.14, 0.2);
+const ctaMat = glossyBlack(BLACK_CTA, 0.12, 0.24);
 
 const DEVICE_BEVEL = Math.min(0.1, DEVICE_D * 0.26);
 const CTA_BEVEL = 0.055;
@@ -207,7 +222,7 @@ const pocketBack = extrude(
   CAVITY_H * 1.02,
   CAVITY_R * 1.02,
   0.04,
-  glossyWhite(),
+  glossyBlack(0x07070a, 0.28, 0.1),
   CTA_BEVEL
 );
 pocketGroup.add(pocketBack);
@@ -217,55 +232,109 @@ deviceRoot.add(membraneGroup);
 
 const MEMBRANE_W = CAVITY_W * 0.98;
 const MEMBRANE_H = CAVITY_H * 0.98;
-const membraneGeo = new THREE.PlaneGeometry(MEMBRANE_W, MEMBRANE_H, 96, 96);
-const membranePositions = membraneGeo.attributes.position as THREE.BufferAttribute;
-const membraneOrigins = Float32Array.from(membranePositions.array as Float32Array);
-const membraneMat = glossyWhite();
+const membraneGeo = new THREE.PlaneGeometry(MEMBRANE_W, MEMBRANE_H, 128, 128);
+const membraneMat = glossyBlack(BLACK_MEMBRANE, 0.1, 0.22);
+
+const membraneUniforms = {
+  uTime: { value: 0 },
+  uAmp: { value: 0 },
+  uWaveFront: { value: 0 },
+  uCenterPin: { value: 0 },
+  uHw: { value: MEMBRANE_W * 0.5 },
+  uHh: { value: MEMBRANE_H * 0.5 },
+  uCornerR: { value: CORNER_R * (MEMBRANE_W / DEVICE_W) },
+};
+
+membraneMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uTime = membraneUniforms.uTime;
+  shader.uniforms.uAmp = membraneUniforms.uAmp;
+  shader.uniforms.uWaveFront = membraneUniforms.uWaveFront;
+  shader.uniforms.uCenterPin = membraneUniforms.uCenterPin;
+  shader.uniforms.uHw = membraneUniforms.uHw;
+  shader.uniforms.uHh = membraneUniforms.uHh;
+  shader.uniforms.uCornerR = membraneUniforms.uCornerR;
+
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <common>',
+    `
+    #include <common>
+
+    uniform float uTime;
+    uniform float uAmp;
+    uniform float uWaveFront;
+    uniform float uCenterPin;
+    uniform float uHw;
+    uniform float uHh;
+    uniform float uCornerR;
+
+    float getMembraneEnvelope(vec2 p) {
+      vec2 q = abs(p) - vec2(uHw, uHh) + vec2(uCornerR);
+      float dist = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - uCornerR;
+      float fadeWidth = 0.06;
+      return 1.0 - smoothstep(-fadeWidth, 0.0, dist);
+    }
+
+    float getMembraneDisplacement(vec2 p) {
+      if (uAmp < 0.00005) return 0.0;
+      float r = length(p);
+      float env = getMembraneEnvelope(p);
+      float originReach = smoothstep(-0.02, 0.38, uWaveFront - r);
+      float centerPin = exp(-r * r * 220.0) * uCenterPin;
+
+      float ringA = sin(r * 16.0 - uTime * 22.0);
+      float ringB = sin(r * 10.0 - uTime * 14.5) * 0.55;
+      float ringC = sin(r * 6.5 - uTime * 9.0) * 0.32;
+      float radialWave = (ringA + ringB + ringC) * originReach + centerPin;
+
+      return radialWave * uAmp * env;
+    }
+    `
+  );
+
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <beginnormal_vertex>',
+    `
+    #include <beginnormal_vertex>
+    if (uAmp > 0.00005) {
+      float eps = 0.006;
+      float zC = getMembraneDisplacement(position.xy);
+      float zX = getMembraneDisplacement(position.xy + vec2(eps, 0.0));
+      float zY = getMembraneDisplacement(position.xy + vec2(0.0, eps));
+      vec3 vX = vec3(eps, 0.0, zX - zC);
+      vec3 vY = vec3(0.0, eps, zY - zC);
+      objectNormal = normalize(cross(vX, vY));
+    }
+    `
+  );
+
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    `
+    #include <begin_vertex>
+    transformed.z += getMembraneDisplacement(position.xy);
+    `
+  );
+};
+
+membraneMat.customProgramCacheKey = () => 'membrane-gpu-displace-v1';
 const membraneMesh = new THREE.Mesh(membraneGeo, membraneMat);
 membraneGroup.add(membraneMesh);
 
-function membraneEnvelope(x: number, y: number): number {
-  const hw = MEMBRANE_W * 0.5;
-  const hh = MEMBRANE_H * 0.5;
-  const cornerR = CORNER_R * (MEMBRANE_W / DEVICE_W);
-  const qx = Math.abs(x) - hw + cornerR;
-  const qy = Math.abs(y) - hh + cornerR;
-  const dist =
-    Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) +
-    Math.min(Math.max(qx, qy), 0) -
-    cornerR;
-  const fadeWidth = 0.06;
-  return 1 - THREE.MathUtils.smoothstep(dist, -fadeWidth, 0);
-}
-
 function updateMembrane(): void {
-  if (membraneVisibleAmount < 0.05 && membraneDriver.energy < 0.01) return;
+  if (membraneVisibleAmount < 0.05 && membraneDriver.energy < 0.01) {
+    membraneUniforms.uAmp.value = 0;
+    return;
+  }
 
   membraneTime += 0.016;
   const amp = membraneDriver.energy * membraneVisibleAmount * 0.09;
-  const arr = membranePositions.array as Float32Array;
   const waveFront = membraneTime * 17.5;
+  const centerPin = Math.max(0, 1 - membraneTime * 0.35) * 0.35;
 
-  for (let i = 0; i < arr.length; i += 3) {
-    const x = membraneOrigins[i];
-    const y = membraneOrigins[i + 1];
-    const r = Math.sqrt(x * x + y * y);
-    const env = membraneEnvelope(x, y);
-
-    const originReach = THREE.MathUtils.smoothstep(waveFront - r, -0.02, 0.38);
-    const centerPin =
-      Math.exp(-r * r * 220) * Math.max(0, 1 - membraneTime * 0.35) * 0.35;
-
-    const ringA = Math.sin(r * 16 - membraneTime * 22);
-    const ringB = Math.sin(r * 10 - membraneTime * 14.5) * 0.55;
-    const ringC = Math.sin(r * 6.5 - membraneTime * 9) * 0.32;
-    const radialWave = (ringA + ringB + ringC) * originReach + centerPin;
-
-    arr[i + 2] = radialWave * amp * env;
-  }
-
-  membranePositions.needsUpdate = true;
-  membraneGeo.computeVertexNormals();
+  membraneUniforms.uTime.value = membraneTime;
+  membraneUniforms.uAmp.value = amp;
+  membraneUniforms.uWaveFront.value = waveFront;
+  membraneUniforms.uCenterPin.value = centerPin;
 }
 
 const MEMBRANE_PULSE_DURATION = 3.2;
@@ -384,17 +453,56 @@ function playMembraneSound(duration = MEMBRANE_PULSE_DURATION): void {
   });
 }
 
+const hudStageTitle = document.getElementById('hud-stage-title');
+const hudProgressBar = document.getElementById('hud-progress-bar');
+const hudDispVal = document.getElementById('hud-disp-val');
+const hudAudioCard = document.getElementById('hud-audio-card');
+const hudAudioLabel = document.getElementById('hud-audio-label');
+const hudAudioSub = document.getElementById('hud-audio-sub');
+
+function updateAudioCardUI(isPlaying: boolean): void {
+  if (!hudAudioCard) return;
+
+  if (isPlaying) {
+    hudAudioCard.classList.remove('is-ready');
+    hudAudioCard.classList.add('is-playing');
+    if (hudAudioLabel) hudAudioLabel.textContent = 'RESONANCE ACTIVE';
+    if (hudAudioSub) hudAudioSub.textContent = '220Hz CONCENTRIC PROPAGATION';
+    return;
+  }
+
+  hudAudioCard.classList.remove('is-playing');
+  if (ctaInteractive) {
+    hudAudioCard.classList.add('is-ready');
+    if (hudAudioLabel) hudAudioLabel.textContent = 'TRANSDUCER ARMED';
+    if (hudAudioSub) hudAudioSub.textContent = 'CLICK PILL OR BADGE TO PULSE';
+  } else {
+    hudAudioCard.classList.remove('is-ready');
+    if (hudAudioLabel) hudAudioLabel.textContent = 'ACOUSTIC TRANSDUCER';
+    if (hudAudioSub) hudAudioSub.textContent = 'SCROLL TO COMPLETE RELIEF';
+  }
+}
+
 function triggerMembranePulse(): void {
   gsap.killTweensOf(membraneDriver);
   membraneTime = 0;
   membraneDriver.energy = 1;
-  playMembraneSound(MEMBRANE_PULSE_DURATION);
+  updateAudioCardUI(true);
+
+  try {
+    playMembraneSound(MEMBRANE_PULSE_DURATION);
+  } catch (err) {
+    console.warn('Audio playback not allowed or failed:', err);
+  }
+
   gsap.to(membraneDriver, {
     energy: 0,
     duration: MEMBRANE_PULSE_DURATION,
     ease: 'power2.out',
     onComplete: () => {
       stopMembraneSound();
+      membraneUniforms.uAmp.value = 0;
+      updateAudioCardUI(false);
     },
   });
 }
@@ -419,6 +527,17 @@ ctaMesh.castShadow = true;
 ctaMesh.userData.isCta = true;
 ctaGroup.add(ctaMesh);
 
+const ctaPressOffset = { z: 0 };
+
+function pressCtaPill(): void {
+  gsap.killTweensOf(ctaPressOffset);
+  gsap.fromTo(
+    ctaPressOffset,
+    { z: 0.05 },
+    { z: 0, duration: 0.28, ease: 'elastic.out(1, 0.4)' }
+  );
+}
+
 function segment(p: number, start: number, end: number): number {
   if (p <= start) return 0;
   if (p >= end) return 1;
@@ -430,7 +549,6 @@ function easeInOut(t: number): number {
 }
 
 function applyScrollState(p: number): void {
-  const pointPhase = easeInOut(segment(p, 0, 0.1));
   const linePhase = easeInOut(segment(p, 0.08, 0.22));
   const facePhase = easeInOut(segment(p, 0.2, 0.38));
   const depthPhase = easeInOut(segment(p, 0.36, 0.58));
@@ -441,8 +559,9 @@ function applyScrollState(p: number): void {
   const depth = THREE.MathUtils.lerp(0.012, DEVICE_D, depthPhase);
   const bodyScale = new THREE.Vector3(faceW / DEVICE_W, 1, depth / DEVICE_D);
 
-  pointMesh.visible = pointPhase > 0.02 && linePhase < 0.2;
-  pointMesh.scale.setScalar(pointPhase);
+  pointMesh.visible = linePhase < 0.2;
+  const pointScale = p < 0.02 ? 1.0 : THREE.MathUtils.lerp(1.0, 0.001, segment(p, 0.02, 0.12));
+  pointMesh.scale.setScalar(pointScale);
 
   const lineWidthMatch = faceW / LINE_DIAMETER;
   lineMesh.visible = linePhase > 0.02 && facePhase < 0.14;
@@ -470,7 +589,8 @@ function applyScrollState(p: number): void {
   ctaGroup.visible = ctaPhase > 0.02;
 
   ctaMesh.scale.z = Math.max(0.001, ctaOut);
-  ctaMesh.position.z = THREE.MathUtils.lerp(-CTA_DEPTH * 0.85, CTA_DEPTH * 0.35, ctaOut);
+  ctaMesh.position.z =
+    THREE.MathUtils.lerp(-CTA_DEPTH * 0.85, CTA_DEPTH * 0.35, ctaOut) - ctaPressOffset.z;
 
   const shadowMat = ctaShadow.material as THREE.MeshBasicMaterial;
   shadowMat.opacity = 0.24 * ctaOut;
@@ -490,6 +610,34 @@ function applyScrollState(p: number): void {
     radius * Math.cos(angleY) * Math.cos(angleX)
   );
   camera.lookAt(0, 0, 0);
+
+  if (hudProgressBar) {
+    hudProgressBar.style.width = `${Math.min(100, Math.max(0, p * 100)).toFixed(1)}%`;
+  }
+
+  if (hudStageTitle) {
+    if (p < 0.28) {
+      hudStageTitle.textContent = '01 // LINEAR GENESIS';
+    } else if (p < 0.62) {
+      hudStageTitle.textContent = '02 // ROTATIONAL DEPTH';
+    } else {
+      hudStageTitle.textContent = '03 // ACOUSTIC MEMBRANE';
+    }
+  }
+
+  if (hudDispVal) {
+    if (p < 0.28) {
+      hudDispVal.textContent = '2D FLAT EXPANSION';
+    } else if (p < 0.62) {
+      hudDispVal.textContent = `EXTRUSION +${(depth * 10).toFixed(1)}mm`;
+    } else {
+      hudDispVal.textContent = `RELIEF SINK -${(recessDepth * 10).toFixed(1)}mm`;
+    }
+  }
+
+  if (membraneDriver.energy <= 0.02) {
+    updateAudioCardUI(false);
+  }
 }
 
 const deviceSection = document.querySelector('.device-section') as HTMLElement | null;
@@ -527,11 +675,7 @@ function onPointerDown(event: PointerEvent): void {
   const hits = raycaster.intersectObject(ctaMesh, false);
   if (hits.length > 0) {
     triggerMembranePulse();
-    gsap.fromTo(
-      ctaMesh.position,
-      { z: ctaMesh.position.z },
-      { z: ctaMesh.position.z + 0.05, duration: 0.16, yoyo: true, repeat: 1, ease: 'power2.out' }
-    );
+    pressCtaPill();
   }
 }
 
@@ -548,6 +692,34 @@ renderer.domElement.addEventListener('pointermove', (event: PointerEvent) => {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObject(ctaMesh, false);
   renderer.domElement.style.cursor = hits.length > 0 ? 'pointer' : 'default';
+});
+
+function onAudioBadgeClick(): void {
+  ensureAudioContext();
+  if (ctaInteractive) {
+    triggerMembranePulse();
+    pressCtaPill();
+  } else if (deviceSection) {
+    const maxScroll = deviceSection.offsetHeight - window.innerHeight;
+    const targetY = deviceSection.offsetTop + maxScroll * 0.88;
+    const scrollObj = { y: window.scrollY };
+    gsap.to(scrollObj, {
+      y: targetY,
+      duration: 1.2,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        window.scrollTo(0, scrollObj.y);
+      },
+    });
+  }
+}
+
+hudAudioCard?.addEventListener('click', onAudioBadgeClick);
+hudAudioCard?.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    onAudioBadgeClick();
+  }
 });
 
 function animate(): void {

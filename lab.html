@@ -13,7 +13,7 @@
 
     html, body {
       width: 100%;
-      background: #242428;
+      background: #242428 !important;
       color: #e8e8ec;
       font-family: system-ui, -apple-system, sans-serif;
       overflow-x: hidden;
@@ -73,6 +73,230 @@
       min-height: 40vh;
       background: #242428;
     }
+
+    /* Minimalist Hardware HUD Layer */
+    .hud-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2.25rem 2.5rem;
+      user-select: none;
+    }
+
+    .hud-panel {
+      pointer-events: none;
+    }
+
+    .hud-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #71717a;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      margin-bottom: 0.35rem;
+    }
+
+    .hud-eyebrow-accent {
+      width: 6px;
+      height: 6px;
+      background: #71717a;
+      border-radius: 50%;
+    }
+
+    .hud-stage-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #f4f4f5;
+      text-transform: uppercase;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      transition: color 0.3s ease;
+    }
+
+    .hud-progress-container {
+      width: 140px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      margin-top: 0.75rem;
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .hud-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #e4e4e7;
+      transition: width 0.08s linear;
+    }
+
+    .hud-bottom-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1.5rem;
+    }
+
+    .hud-bottom-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+    }
+
+    .hud-data-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .hud-tag {
+      color: #71717a;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      min-width: 90px;
+    }
+
+    .hud-val {
+      color: #d4d4d8;
+      font-weight: 500;
+    }
+
+    /* Interactive Audio Badge */
+    .hud-audio-badge {
+      pointer-events: auto;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.75rem 1.15rem;
+      background: rgba(18, 18, 22, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    .hud-audio-badge:hover {
+      background: rgba(28, 28, 34, 0.85);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .hud-audio-badge.is-ready {
+      border-color: rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.12);
+    }
+
+    .hud-audio-badge.is-playing {
+      border-color: rgba(52, 211, 153, 0.6);
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.25);
+    }
+
+    .hud-audio-indicator {
+      position: relative;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hud-audio-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #71717a;
+      transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hud-audio-badge.is-ready .hud-audio-dot {
+      background: #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
+      animation: hudPulse 2s infinite;
+    }
+
+    .hud-audio-badge.is-playing .hud-audio-dot {
+      display: none;
+    }
+
+    .hud-audio-eq {
+      display: none;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+    }
+
+    .hud-audio-badge.is-playing .hud-audio-eq {
+      display: flex;
+    }
+
+    .eq-bar {
+      width: 2px;
+      background: #34d399;
+      border-radius: 1px;
+      animation: eqBounce 0.6s infinite ease-in-out alternate;
+    }
+
+    .bar-1 { height: 40%; animation-delay: 0.05s; }
+    .bar-2 { height: 85%; animation-delay: 0.2s; }
+    .bar-3 { height: 60%; animation-delay: 0.1s; }
+    .bar-4 { height: 100%; animation-delay: 0.25s; }
+
+    @keyframes hudPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.35); opacity: 1; }
+    }
+
+    @keyframes eqBounce {
+      0% { height: 25%; }
+      100% { height: 100%; }
+    }
+
+    .hud-audio-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    }
+
+    .hud-audio-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #e4e4e7;
+    }
+
+    .hud-audio-sub {
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      color: #a1a1aa;
+    }
+
+    @media (max-width: 640px) {
+      .hud-layer {
+        padding: 1.5rem 1.25rem;
+      }
+      .hud-stage-title {
+        font-size: 1rem;
+      }
+      .hud-bottom-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -84,6 +308,51 @@
   <section class="device-section">
     <div class="device-pin">
       <div id="lab-canvas"></div>
+      <div class="hud-layer" aria-live="polite">
+        <!-- Top Left: Spec Header & Stage -->
+        <header class="hud-panel hud-top-left">
+          <div class="hud-eyebrow">
+            <span class="hud-eyebrow-accent"></span>
+            <span>CHOREOGRAPHY ARCHITECTURE // M-01</span>
+          </div>
+          <div class="hud-stage-title" id="hud-stage-title">01 // LINEAR GENESIS</div>
+          <div class="hud-progress-container">
+            <div class="hud-progress-bar" id="hud-progress-bar"></div>
+          </div>
+        </header>
+
+        <!-- Bottom Bar container with Left Specs & Right Audio Card -->
+        <div class="hud-bottom-row">
+          <!-- Bottom Left: Telemetry & Material Readout -->
+          <div class="hud-panel hud-bottom-left">
+            <div class="hud-data-row">
+              <span class="hud-tag">SURFACE</span>
+              <span class="hud-val">ONYX CERAMIC · CLEARCOAT 1.0</span>
+            </div>
+            <div class="hud-data-row">
+              <span class="hud-tag">KINEMATICS</span>
+              <span class="hud-val" id="hud-disp-val">2D FLAT EXPANSION</span>
+            </div>
+          </div>
+
+          <!-- Bottom Right: Interactive Acoustic Haptic Badge -->
+          <div class="hud-panel hud-audio-badge" id="hud-audio-card" role="button" tabindex="0" title="Trigger Acoustic Impulse">
+            <div class="hud-audio-indicator">
+              <div class="hud-audio-dot" id="hud-audio-dot"></div>
+              <div class="hud-audio-eq" id="hud-audio-eq" aria-hidden="true">
+                <span class="eq-bar bar-1"></span>
+                <span class="eq-bar bar-2"></span>
+                <span class="eq-bar bar-3"></span>
+                <span class="eq-bar bar-4"></span>
+              </div>
+            </div>
+            <div class="hud-audio-info">
+              <div class="hud-audio-label" id="hud-audio-label">ACOUSTIC TRANSDUCER</div>
+              <div class="hud-audio-sub" id="hud-audio-sub">SCROLL TO COMPLETE RELIEF</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
