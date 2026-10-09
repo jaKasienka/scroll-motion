@@ -120,20 +120,34 @@ if (parametricSection && stickyContainer) {
 function animate(): void {
   requestAnimationFrame(animate);
 
-  const t = scrollProgress;
+  const currentT = scrollProgress;
+
+  const time1 = currentT * Math.PI * 2;
+  const time2 = currentT * Math.PI * 3;
+  const time3 = currentT * Math.PI * 1.5;
 
   const currentPositions = positionAttribute.array as Float32Array;
 
-  // Single mathematical loop deforming BOTH solidMesh and wireframeMesh simultaneously!
   for (let i = 0; i < currentPositions.length; i += 3) {
     const x = originalPositions[i];
     const y = originalPositions[i + 1];
 
-    const primaryWave = Math.sin(x * 1.5 + t * Math.PI * 2) * 0.7;
-    const secondaryWave = Math.cos(y * 2.5 + t * Math.PI) * 0.35;
-    const microRipple = Math.sin((x + y) * 3 + t * Math.PI * 3) * 0.15;
+    // Concentric Depth (radius = Math.sqrt(...)): Adds a water-drop pulse origin right behind your central hero text that ripples outwards as you scroll.
+    const radius = Math.sqrt(x * x + y * y);
+    const radialRipple = Math.sin(radius * 2.8 - time1) * 0.45;
+    
+    // Non-linear Cross Waves (Math.sin(x) * Math.cos(y)): Replaces rigid grid-based waves with asymmetrical fluid motion, so crests merge and separate organically.
+    const directionalSwell =
+      Math.sin(x * 1.2 + time1) * Math.cos(y * 1.8 + time3) * 0.4;
+    
+    // Logarithmic Falloff (Math.log1p): Keeps high-frequency detail crisp at the focal center while gently smoothing out edges before they hit the viewport bounds.
+    const logDecay = 1 / (1 + Math.log1p(radius * 0.5));
 
-    currentPositions[i + 2] = (primaryWave + secondaryWave + microRipple) * t;
+    // Micro-texture (Math.sin(...)): Adds subtle depth-based pixelation that's especially noticeable when scrolling near the origin, creating a subtle 'video game' visual effect.
+    const microTexture =
+      Math.sin((x * 2.0 + y * 3.0) * 15.0 + time2) * 0.08 * logDecay;
+
+    currentPositions[i + 2] = (radialRipple + directionalSwell + microTexture) * currentT;
   }
 
   // Updating the single shared attribute deforms both meshes at once
@@ -141,8 +155,8 @@ function animate(): void {
   geometry.computeVertexNormals();
 
   // Sync Rotations
-  const tiltX = t * 0.75;
-  const tiltY = t * 0.35;
+  const tiltX = currentT * 0.75;
+  const tiltY = currentT * 0.35;
 
   solidMesh.rotation.x = tiltX;
   solidMesh.rotation.y = tiltY;
@@ -150,8 +164,8 @@ function animate(): void {
   wireframeMesh.rotation.y = tiltY;
 
   // Orbit key light
-  keyLight.position.x = 6 + Math.sin(t * Math.PI) * 2;
-  keyLight.position.y = 8 + Math.cos(t * Math.PI) * 2;
+  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2;
+  keyLight.position.y = 8 + Math.cos(currentT * Math.PI) * 2;
 
   renderer.render(scene, camera);
 }
