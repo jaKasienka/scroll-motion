@@ -11,7 +11,6 @@ const CORNER_R = 0.52;
 
 const BLACK = 0x0e0e12;
 const BLACK_CTA = 0x18181e;
-const BLACK_MEMBRANE = 0x0c0c10;
 
 const container = document.getElementById('lab-canvas') as HTMLDivElement | null;
 if (!container) throw new Error('lab-canvas element missing');
@@ -99,7 +98,7 @@ const CAVITY_W = DEVICE_W * 0.9;
 const CAVITY_H = DEVICE_H * 0.61;
 const CAVITY_CENTER_Y = DEVICE_H * 0.17;
 const CAVITY_R = CORNER_R * (CAVITY_W / DEVICE_W);
-const CAVITY_DEPTH = 0.18;
+const CAVITY_DEPTH = 0.28;
 function pillRadius(width: number, height: number): number {
   return Math.min(width, height) / 2;
 }
@@ -227,13 +226,29 @@ const pocketBack = extrude(
 );
 pocketGroup.add(pocketBack);
 
+function silkyMembraneMaterial(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0x14141c,
+    roughness: 0.22,
+    metalness: 0.26,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.18,
+    sheen: 1.0,
+    sheenColor: new THREE.Color(0xb8c0d4),
+    sheenRoughness: 0.32,
+    iridescence: 0.26,
+    iridescenceIOR: 1.33,
+    reflectivity: 0.92,
+  });
+}
+
 const membraneGroup = new THREE.Group();
 deviceRoot.add(membraneGroup);
 
 const MEMBRANE_W = CAVITY_W * 0.98;
 const MEMBRANE_H = CAVITY_H * 0.98;
 const membraneGeo = new THREE.PlaneGeometry(MEMBRANE_W, MEMBRANE_H, 128, 128);
-const membraneMat = glossyBlack(BLACK_MEMBRANE, 0.1, 0.22);
+const membraneMat = silkyMembraneMaterial();
 
 const membraneUniforms = {
   uTime: { value: 0 },
@@ -274,6 +289,14 @@ membraneMat.onBeforeCompile = (shader) => {
       return 1.0 - smoothstep(-fadeWidth, 0.0, dist);
     }
 
+    float getRestingDish(vec2 p) {
+      float r = length(p);
+      float env = getMembraneEnvelope(p);
+      // Subtle acoustic saucer dish: curves gently by ~0.022 in center, fading smoothly at the boundary
+      float dish = (cos(min(r * 1.6, 3.14159265)) - 1.0) * 0.022;
+      return dish * env;
+    }
+
     float getMembraneDisplacement(vec2 p) {
       if (uAmp < 0.00005) return 0.0;
       float r = length(p);
@@ -288,6 +311,10 @@ membraneMat.onBeforeCompile = (shader) => {
 
       return radialWave * uAmp * env;
     }
+
+    float getTotalDisplacement(vec2 p) {
+      return getRestingDish(p) + getMembraneDisplacement(p);
+    }
     `
   );
 
@@ -295,15 +322,13 @@ membraneMat.onBeforeCompile = (shader) => {
     '#include <beginnormal_vertex>',
     `
     #include <beginnormal_vertex>
-    if (uAmp > 0.00005) {
-      float eps = 0.006;
-      float zC = getMembraneDisplacement(position.xy);
-      float zX = getMembraneDisplacement(position.xy + vec2(eps, 0.0));
-      float zY = getMembraneDisplacement(position.xy + vec2(0.0, eps));
-      vec3 vX = vec3(eps, 0.0, zX - zC);
-      vec3 vY = vec3(0.0, eps, zY - zC);
-      objectNormal = normalize(cross(vX, vY));
-    }
+    float eps = 0.006;
+    float zC = getTotalDisplacement(position.xy);
+    float zX = getTotalDisplacement(position.xy + vec2(eps, 0.0));
+    float zY = getTotalDisplacement(position.xy + vec2(0.0, eps));
+    vec3 vX = vec3(eps, 0.0, zX - zC);
+    vec3 vY = vec3(0.0, eps, zY - zC);
+    objectNormal = normalize(cross(vX, vY));
     `
   );
 
@@ -311,7 +336,7 @@ membraneMat.onBeforeCompile = (shader) => {
     '#include <begin_vertex>',
     `
     #include <begin_vertex>
-    transformed.z += getMembraneDisplacement(position.xy);
+    transformed.z += getTotalDisplacement(position.xy);
     `
   );
 };
@@ -456,6 +481,7 @@ function playMembraneSound(duration = MEMBRANE_PULSE_DURATION): void {
 const hudStageTitle = document.getElementById('hud-stage-title');
 const hudProgressBar = document.getElementById('hud-progress-bar');
 const hudDispVal = document.getElementById('hud-disp-val');
+const hudSurfaceVal = document.getElementById('hud-surface-val');
 const hudAudioCard = document.getElementById('hud-audio-card');
 const hudAudioLabel = document.getElementById('hud-audio-label');
 const hudAudioSub = document.getElementById('hud-audio-sub');
@@ -555,8 +581,12 @@ function smoothstep(t: number): number {
 function applyScrollState(p: number): void {
   const linePhase = easeInOut(segment(p, 0.08, 0.22));
   const facePhase = easeInOut(segment(p, 0.2, 0.38));
-  const depthPhase = easeInOut(segment(p, 0.36, 0.58));
-  const reliefPhase = smoothstep(segment(p, 0.58, 0.92));
+  const depthPhase = easeInOut(segment(p, 0.36, 0.56));
+
+  // Membrane sink begins as rotational depth finishes at 0.56 and continues smoothly all the way to 0.94
+  const sinkPhase = smoothstep(segment(p, 0.56, 0.94));
+  // Button begins emerging at 0.62 and continuously shapes forward while membrane sinks deeper
+  const buttonPhase = smoothstep(segment(p, 0.62, 0.94));
 
   const lineHeight = THREE.MathUtils.lerp(0.05, DEVICE_H, linePhase);
   const faceW = THREE.MathUtils.lerp(LINE_DIAMETER, DEVICE_W, facePhase);
@@ -573,35 +603,36 @@ function applyScrollState(p: number): void {
 
   // Exact front face position taking extruded bevel into account
   const frontFaceZ = (DEVICE_D / 2 + DEVICE_BEVEL) * (depth / DEVICE_D);
-  const recessDepth = CAVITY_DEPTH * reliefPhase;
+  const recessDepth = CAVITY_DEPTH * sinkPhase;
 
-  const showCut = reliefPhase > 0.0001;
+  const showCut = sinkPhase > 0.0001;
   bodySolid.visible = facePhase > 0 && !showCut;
   bodySolid.scale.copy(bodyScale);
   bodyFrame.visible = facePhase > 0 && showCut;
   bodyFrame.scale.copy(bodyScale);
 
   pocketGroup.visible = showCut;
-  pocketBack.position.set(0, CAVITY_CENTER_Y, frontFaceZ - CAVITY_DEPTH - 0.08);
+  pocketBack.position.set(0, CAVITY_CENTER_Y, frontFaceZ - CAVITY_DEPTH - 0.06);
 
-  membraneVisibleAmount = reliefPhase;
+  membraneVisibleAmount = sinkPhase;
   membraneGroup.visible = showCut;
   membraneGroup.position.set(0, CAVITY_CENTER_Y, frontFaceZ - recessDepth);
 
   ctaGroup.position.z = frontFaceZ;
-  ctaGroup.visible = reliefPhase > 0.001;
+  ctaGroup.visible = buttonPhase > 0.001;
 
-  ctaMesh.scale.z = Math.max(0.001, reliefPhase);
+  // Button starts flush at front face (z=0) and elevates smoothly forward
+  ctaMesh.scale.z = Math.max(0.001, buttonPhase);
   ctaMesh.position.z =
-    THREE.MathUtils.lerp(-0.14, 0.05, reliefPhase) - ctaPressOffset.z;
+    THREE.MathUtils.lerp(0, 0.07, buttonPhase) - ctaPressOffset.z;
 
   const shadowMat = ctaShadow.material as THREE.MeshBasicMaterial;
-  shadowMat.opacity = 0.24 * reliefPhase;
-  ctaShadow.scale.set(1, 1, Math.max(0.001, reliefPhase));
+  shadowMat.opacity = 0.26 * buttonPhase;
+  ctaShadow.scale.set(1, 1, Math.max(0.001, buttonPhase));
 
-  ctaInteractive = reliefPhase > 0.90 && p > 0.80;
+  ctaInteractive = buttonPhase > 0.90 && p > 0.82;
 
-  const camBlend = easeInOut(segment(p, 0.32, 0.58));
+  const camBlend = easeInOut(segment(p, 0.32, 0.56));
   const holdAngle = 0.42;
   const angleX = THREE.MathUtils.lerp(0, holdAngle, camBlend);
   const angleY = THREE.MathUtils.lerp(0, 0.55, camBlend);
@@ -621,7 +652,7 @@ function applyScrollState(p: number): void {
   if (hudStageTitle) {
     if (p < 0.28) {
       hudStageTitle.textContent = '01 // LINEAR GENESIS';
-    } else if (p < 0.58) {
+    } else if (p < 0.56) {
       hudStageTitle.textContent = '02 // ROTATIONAL DEPTH';
     } else {
       hudStageTitle.textContent = '03 // ACOUSTIC MEMBRANE';
@@ -631,10 +662,18 @@ function applyScrollState(p: number): void {
   if (hudDispVal) {
     if (p < 0.28) {
       hudDispVal.textContent = '2D FLAT EXPANSION';
-    } else if (p < 0.58) {
+    } else if (p < 0.56) {
       hudDispVal.textContent = `EXTRUSION +${(depth * 10).toFixed(1)}mm`;
     } else {
       hudDispVal.textContent = `RELIEF SINK -${(recessDepth * 10).toFixed(1)}mm`;
+    }
+  }
+
+  if (hudSurfaceVal) {
+    if (p < 0.56) {
+      hudSurfaceVal.textContent = 'ONYX CERAMIC · CLEARCOAT 1.0';
+    } else {
+      hudSurfaceVal.textContent = 'ACOUSTIC SILK · SHEEN TRANSDUCER';
     }
   }
 
