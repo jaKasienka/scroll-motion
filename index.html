@@ -3,48 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Parametric 2D to 3D Morph</title>
+  <title>Parametric Topology · Morph Studio</title>
   <style>
-    /* 1. Global Reset */
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-  
+
     html, body {
       width: 100%;
-      background: #0f0f11;
+      background: #242428;
       color: #ffffff;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      /* Prevents horizontal overflow caused by 100vw */
-      overflow-x: hidden; 
-      -webkit-text-size-adjust: 100%;
-      -moz-text-size-adjust: 100%;
-      text-size-adjust: 100%;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-  
-    /* 2. Outer Scroll Track */
+
+    /* Minimalist Hardware Navigation */
+    .site-nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      pointer-events: auto;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    }
+
+    .site-nav a {
+      color: #71717a;
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+
+    .site-nav a:hover {
+      color: #f4f4f5;
+    }
+
+    .site-nav a[aria-current="page"] {
+      color: #d4d4d8;
+      font-weight: 600;
+    }
+
+    /* Outer Scroll Track */
     .parametric-section {
       position: relative;
-      height: 300vh; /* Gives 3 screens of scroll distance while pinned */
+      height: 400vh;
       width: 100%;
     }
 
-    /* 3. Pinned viewport (GSAP ScrollTrigger applies fixed positioning while active) */
+    /* Pinned Viewport Container */
     .sticky-container {
       position: relative;
       width: 100%;
       height: 100vh;
       overflow: hidden;
     }
-    /* 4. Canvas Base Layer */
+
     #canvas-container {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      inset: 0;
       z-index: 1;
     }
 
@@ -53,105 +78,250 @@
       width: 100%;
       height: 100%;
     }
-  
-    /* 5. Overlay Heading (Pinned on top of canvas) */
-    .hero-overlay {
+
+    /* Minimalist Hardware HUD Layer (Matches Lab) */
+    .hud-layer {
       position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2; /* Sits above WebGL canvas */
-      pointer-events: none; /* Allows scrolling & interaction to pass through */
-      padding: 4rem 2rem; /* Match .next-section so title aligns with h2 */
-      text-align: left;
-    }
-
-    /* 3. Typography & Section Spacing */
-    .section {
-      position: relative;
-      z-index: 2;
-      height: 100vh;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none; /* Crucial: stops text container from blocking scroll */
-    }
-  
-    /* 2. Lock explicit line-height and font sizing on the h1 tags */
-    .section h1 {
-      /* Force sans-serif fallback so Edge doesn't apply system-ui font scaling */
-      font-family: Arial, Helvetica, sans-serif !important;
-      font-size: 16px !important;
-      line-height: 1 !important;
-      
-      /* Ensure Edge respects fixed bounds */
-      max-height: 48px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #e2e8f0;
-      background: rgba(20, 20, 23, 0.75);
-      padding: 12px 24px;
-      border-radius: 9999px;
-      -webkit-backdrop-filter: blur(8px);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      white-space: nowrap;
-    }
-
-    .section-title {
-      color: #ffffff;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 3.5rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin: 0;
-      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    }
-
-    .site-nav {
-      position: fixed;
-      top: 0;
-      right: 0;
+      inset: 0;
       z-index: 10;
+      pointer-events: none;
       display: flex;
-      gap: 1.25rem;
-      padding: 4rem 2rem;
-      pointer-events: auto;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2.25rem 2.5rem;
+      user-select: none;
     }
 
-    .site-nav a {
-      color: #94a3b8;
-      text-decoration: none;
-      font-size: 0.875rem;
-      letter-spacing: 0.06em;
+    .hud-panel {
+      pointer-events: none;
+    }
+
+    .hud-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 0.35rem;
     }
 
-    .site-nav a:hover {
-      color: #f8fafc;
+    .hud-eyebrow-accent {
+      width: 6px;
+      height: 6px;
+      background: #71717a;
+      border-radius: 50%;
     }
 
-    .site-nav a[aria-current="page"] {
-      color: #34d399;
+    .hud-stage-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #f4f4f5;
+      text-transform: uppercase;
+      transition: color 0.3s ease;
     }
 
-    /* 6. Next Section */
-    .next-section {
+    .hud-progress-container {
+      width: 140px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      margin-top: 0.75rem;
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .hud-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #e4e4e7;
+      transition: width 0.08s linear;
+    }
+
+    .hud-bottom-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1.5rem;
+    }
+
+    .hud-bottom-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+    }
+
+    .hud-data-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .hud-tag {
+      color: #71717a;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      min-width: 90px;
+    }
+
+    .hud-val {
+      color: #d4d4d8;
+      font-weight: 500;
+    }
+
+    /* Editorial Action Badge (Navigates to Lab) */
+    .hud-nav-badge {
+      pointer-events: auto;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.75rem 1.15rem;
+      background: rgba(18, 18, 22, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      text-decoration: none;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    .hud-nav-badge:hover {
+      background: rgba(28, 28, 34, 0.85);
+      border-color: rgba(255, 255, 255, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .hud-badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #71717a;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hud-nav-badge:hover .hud-badge-dot {
+      background: #e4e4e7;
+      box-shadow: 0 0 10px rgba(228, 228, 231, 0.6);
+    }
+
+    .hud-badge-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .hud-badge-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #e4e4e7;
+    }
+
+    .hud-badge-sub {
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      color: #a1a1aa;
+    }
+
+    /* Seamless Editorial Transition to Next Experiment */
+    .transition-section {
       position: relative;
       z-index: 3;
-      min-height: 100vh;
-      background-color: #0f172a;
-      color: #ffffff;
-      padding: 4rem 2rem;
+      min-height: 80vh;
+      background-color: #242428;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 5rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
     }
-    
-  </style>
 
+    .transition-card {
+      max-width: 580px;
+      padding: 3rem 2.5rem;
+      background: rgba(18, 18, 22, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .transition-eyebrow {
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 0.75rem;
+    }
+
+    .transition-title {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #f4f4f5;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .transition-desc {
+      font-size: 0.8rem;
+      line-height: 1.6;
+      letter-spacing: 0.03em;
+      color: #a1a1aa;
+      margin-bottom: 2rem;
+    }
+
+    .transition-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.6rem;
+      background: #f4f4f5;
+      color: #0e0e12;
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 9999px;
+      transition: all 0.25s ease;
+    }
+
+    .transition-cta:hover {
+      background: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 255, 255, 0.15);
+    }
+
+    @media (max-width: 640px) {
+      .hud-layer {
+        padding: 1.5rem 1.25rem;
+      }
+      .hud-stage-title {
+        font-size: 1rem;
+      }
+      .hud-bottom-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+      .transition-section {
+        padding: 3rem 1.25rem;
+      }
+      .transition-card {
+        padding: 2rem 1.5rem;
+      }
+    }
+  </style>
 </head>
 <body>
   <nav class="site-nav" aria-label="Site">
@@ -159,22 +329,63 @@
     <a href="/lab.html">Lab</a>
   </nav>
 
-  <!-- The 300vh outer section creates the scroll track -->
+  <!-- Pinned 400vh Outer Scroll Section -->
   <section class="parametric-section">
-    <!-- Everything inside sticky-container stays pinned to the screen -->
     <div class="sticky-container">
       <div id="canvas-container"></div>
-      
-      <!-- Heading stays pinned over the 3D canvas -->
-      <div class="hero-overlay">
-        <h1 class="section-title">Parametric Surface</h1>
+
+      <!-- Minimalist Hardware HUD Layer -->
+      <div class="hud-layer">
+        <div class="hud-panel hud-top-left">
+          <div class="hud-eyebrow">
+            <span class="hud-eyebrow-accent" aria-hidden="true"></span>
+            <span>Mathematical Topology // M-00</span>
+          </div>
+          <div class="hud-stage-title" id="hud-stage-title">01 // 2D Harmonic Spline</div>
+          <div class="hud-progress-container" aria-hidden="true">
+            <div class="hud-progress-bar" id="hud-progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="hud-bottom-row">
+          <div class="hud-panel hud-bottom-left">
+            <div class="hud-data-row">
+              <span class="hud-tag">SURFACE</span>
+              <span class="hud-val" id="hud-surface-val">ONYX CERAMIC · HYBRID MESH</span>
+            </div>
+            <div class="hud-data-row">
+              <span class="hud-tag">KINEMATICS</span>
+              <span class="hud-val" id="hud-disp-val">HARMONIC SWELL +0.0mm</span>
+            </div>
+          </div>
+
+          <div class="hud-panel hud-bottom-right">
+            <a href="/lab.html" class="hud-nav-badge" id="hud-nav-badge" aria-label="Explore Device Relief Lab">
+              <div class="hud-badge-dot" aria-hidden="true"></div>
+              <div class="hud-badge-info">
+                <div class="hud-badge-label">EXPERIMENT M-01</div>
+                <div class="hud-badge-sub">DEVICE RELIEF LAB &rarr;</div>
+              </div>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Next section scrolls up only AFTER the 3D morph completes -->
-  <section class="next-section">
-    <h2>Next Section Content</h2>
+  <!-- Seamless Transition Section -->
+  <section class="transition-section">
+    <div class="transition-card">
+      <div class="transition-eyebrow">CONTINUE EXPLORATION // M-01</div>
+      <h2 class="transition-title">Acoustic Device Relief</h2>
+      <p class="transition-desc">
+        Explore stage-gated kinetic choreography, compound parametric boolean bevels, deep -2.8mm membrane relief, and real-time Web Audio haptic synthesis.
+      </p>
+      <a href="/lab.html" class="transition-cta">
+        <span>Enter Device Lab</span>
+        <span aria-hidden="true">&rarr;</span>
+      </a>
+    </div>
   </section>
 
   <script type="module" src="src/main.ts"></script>

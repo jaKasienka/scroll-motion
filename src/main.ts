@@ -6,94 +6,129 @@ gsap.registerPlugin(ScrollTrigger);
 
 // 1. Scene & Camera Setup
 const container = document.getElementById('canvas-container') as HTMLDivElement | null;
-if (!container) throw new Error("Canvas container element missing");
+if (!container) throw new Error('Canvas container element missing');
 
 const scene: THREE.Scene = new THREE.Scene();
+scene.background = new THREE.Color(0x242428);
 
 const camera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera(
-  45,
+  42,
   window.innerWidth / window.innerHeight,
   0.1,
   1000
 );
-camera.position.set(0, 0, 10);
+camera.position.set(0, 0, 9.5);
 
-const renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({ 
-  antialias: true, 
-  alpha: true,
-  precision: 'highp'
+const renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
+  antialias: true,
+  precision: 'highp',
+  powerPreference: 'high-performance',
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
 
-// 2. Lighting Setup
-const ambientLight = new THREE.AmbientLight(0x0f172a, 1.8);
+// 2. High-End Studio Lighting Rig (Neutral Onyx Aesthetic)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
 scene.add(ambientLight);
 
-const keyLight = new THREE.DirectionalLight(0x34d399, 3.5);
-keyLight.position.set(6, 8, 5);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x18181e, 0.75);
+scene.add(hemiLight);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
+keyLight.position.set(6, 7, 6);
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight(0x38bdf8, 2.2);
-rimLight.position.set(-6, -4, -2);
+const fillLight = new THREE.DirectionalLight(0xa1a1aa, 1.1);
+fillLight.position.set(-6, -4, 4);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xd4d4d8, 2.0);
+rimLight.position.set(0, -6, -4);
 scene.add(rimLight);
 
-// Backlight sphere behind the wave
-const glowGeo = new THREE.SphereGeometry(2, 32, 32);
-const glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-const glowMesh = new THREE.Mesh(glowGeo, glowMat);
-glowMesh.position.set(0, 0, -4);
-scene.add(glowMesh);
+const frontSpecLight = new THREE.DirectionalLight(0xffffff, 1.0);
+frontSpecLight.position.set(0, 0, 8);
+scene.add(frontSpecLight);
 
-// 3. Parametric Geometry (Reduced density slightly to fix grid line shimmer)
-const width = 8;
-const height = 4;
-//const segmentsX = 80;
-const segmentsX = 100;
-//const segmentsY = 40;
-const segmentsY = 50;
+// 3. Parametric Geometry
+const width = 8.5;
+const height = 4.6;
+const segmentsX = 110;
+const segmentsY = 60;
 
-const geometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(width, height, segmentsX, segmentsY);
+const geometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(
+  width,
+  height,
+  segmentsX,
+  segmentsY
+);
 
 const positionAttribute = geometry.attributes.position as THREE.BufferAttribute;
-const originalPositions: Float32Array = Float32Array.from(positionAttribute.array as Float32Array);
+const originalPositions: Float32Array = Float32Array.from(
+  positionAttribute.array as Float32Array
+);
 
 // 4. Shared-Geometry Hybrid Meshes
-// A. Solid Phong Body
-const solidMaterial = new THREE.MeshPhongMaterial({
-  color: 0x064e3b,
-  emissive: 0x022c22,
-  specular: 0x6ee7b7,
-  shininess: 50,
-  transparent: true,
-  opacity: 0.90,
-  side: THREE.FrontSide, // FrontSide prevents back-face depth bleed
+// A. Deep Onyx Physical Ceramic Material
+const solidMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0x121216,
+  roughness: 0.16,
+  metalness: 0.1,
+  clearcoat: 1.0,
+  clearcoatRoughness: 0.08,
+  reflectivity: 0.92,
   polygonOffset: true,
   polygonOffsetFactor: 2,
-  polygonOffsetUnits: 2
+  polygonOffsetUnits: 2,
+  side: THREE.FrontSide,
 });
 
 const solidMesh = new THREE.Mesh(geometry, solidMaterial);
 scene.add(solidMesh);
 
-// B. Wireframe Overlay (Uses SAME geometry reference)
+// B. Technical Slate Hairline Wireframe Overlay
 const wireframeMaterial = new THREE.MeshBasicMaterial({
-  color: 0xa7f3d0,
+  color: 0x71717a,
   wireframe: true,
   transparent: true,
-  opacity: 0.25,
-  side: THREE.FrontSide
+  opacity: 0.22,
+  side: THREE.FrontSide,
 });
 
 const wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
-// Tiny Z offset + scale bump keeps wireframe cleanly on top
-wireframeMesh.scale.set(1.002, 1.002, 1.002);
-wireframeMesh.position.z = 0.005;
+wireframeMesh.scale.set(1.001, 1.001, 1.001);
+wireframeMesh.position.z = 0.004;
 scene.add(wireframeMesh);
 
-// 5. Scroll-jacked pinning (GSAP ScrollTrigger)
-let scrollProgress = 0;
+// 5. HUD References
+const stageTitleEl = document.getElementById('hud-stage-title');
+const progressBarEl = document.getElementById('hud-progress-bar');
+const surfaceValEl = document.getElementById('hud-surface-val');
+const dispValEl = document.getElementById('hud-disp-val');
+
+// 6. Natural 3D Mouse Parallax Tilt
+const mouseParallax = {
+  targetX: 0,
+  targetY: 0,
+  currentX: 0,
+  currentY: 0,
+};
+
+window.addEventListener('pointermove', (e: PointerEvent) => {
+  const normX = (e.clientX / window.innerWidth) * 2 - 1;
+  const normY = (e.clientY / window.innerHeight) * 2 - 1;
+  // Natural pitch: moving pointer up tilts surface up, right yaws right
+  mouseParallax.targetX = normX * 0.14;
+  mouseParallax.targetY = -normY * 0.10;
+});
+
+// 7. Scroll-Jacked Pinning & Smooth Target Progress
+let targetProgress = 0;
+let currentT = 0;
 
 const parametricSection = document.querySelector('.parametric-section') as HTMLElement | null;
 const stickyContainer = document.querySelector('.sticky-container') as HTMLElement | null;
@@ -109,70 +144,99 @@ if (parametricSection && stickyContainer) {
     anticipatePin: 1,
     invalidateOnRefresh: true,
     onUpdate: (self) => {
-      scrollProgress = self.progress;
+      targetProgress = self.progress;
     },
   });
 
   ScrollTrigger.refresh();
 }
 
-// 6. Clean, Single-Loop Animation
+// 8. Render & Kinematic Loop
 function animate(): void {
   requestAnimationFrame(animate);
 
-  const currentT = scrollProgress;
+  // Smooth interpolation for buttery kinematics
+  currentT += (targetProgress - currentT) * 0.10;
 
-  const time1 = currentT * Math.PI * 2;
-  const time2 = currentT * Math.PI * 3;
-  const time3 = currentT * Math.PI * 1.5;
+  // Smooth mouse parallax lerp
+  mouseParallax.currentX += (mouseParallax.targetX - mouseParallax.currentX) * 0.05;
+  mouseParallax.currentY += (mouseParallax.targetY - mouseParallax.currentY) * 0.05;
 
   const currentPositions = positionAttribute.array as Float32Array;
+
+  // Harmonic Wave Formula (Restored previous sine/cosine cross-topology with enhanced harmonics & edge decay)
+  const halfW = width * 0.5;
+  const halfH = height * 0.5;
 
   for (let i = 0; i < currentPositions.length; i += 3) {
     const x = originalPositions[i];
     const y = originalPositions[i + 1];
 
-    // Concentric Depth (radius = Math.sqrt(...)): Adds a water-drop pulse origin right behind your central hero text that ripples outwards as you scroll.
-    const radius = Math.sqrt(x * x + y * y);
-    const radialRipple = Math.sin(radius * 2.8 - time1) * 0.45;
-    
-    // Non-linear Cross Waves (Math.sin(x) * Math.cos(y)): Replaces rigid grid-based waves with asymmetrical fluid motion, so crests merge and separate organically.
-    const directionalSwell =
-      Math.sin(x * 1.2 + time1) * Math.cos(y * 1.8 + time3) * 0.4;
-    
-    // Logarithmic Falloff (Math.log1p): Keeps high-frequency detail crisp at the focal center while gently smoothing out edges before they hit the viewport bounds.
-    const logDecay = 1 / (1 + Math.log1p(radius * 0.5));
+    // Orthogonal and diagonal harmonic wave components
+    const primaryWave = Math.sin(x * 1.45 + currentT * Math.PI * 2.2) * 0.72;
+    const secondaryWave = Math.cos(y * 2.2 + currentT * Math.PI * 1.8) * 0.38;
+    const diagonalInterference = Math.sin((x * 0.9 + y * 1.25) * 2.1 + currentT * Math.PI * 2.8) * 0.22;
+    const microRipple = Math.sin((x * 2.2 - y * 1.8) * 2.6 + currentT * Math.PI * 3.4) * 0.08;
 
-    // Micro-texture (Math.sin(...)): Adds subtle depth-based pixelation that's especially noticeable when scrolling near the origin, creating a subtle 'video game' visual effect.
-    const microTexture =
-      Math.sin((x * 2.0 + y * 3.0) * 15.0 + time2) * 0.08 * logDecay;
+    // Architectural perimeter cosine falloff to keep edges elegant
+    const normX = Math.min(1, Math.abs(x) / halfW);
+    const normY = Math.min(1, Math.abs(y) / halfH);
+    const edgeDecay = Math.cos(normX * (Math.PI * 0.44)) * Math.cos(normY * (Math.PI * 0.44));
 
-    currentPositions[i + 2] = (radialRipple + directionalSwell + microTexture) * currentT;
+    const waveHeight = (primaryWave + secondaryWave + diagonalInterference + microRipple) * Math.max(0, edgeDecay);
+
+    currentPositions[i + 2] = waveHeight * currentT;
   }
 
-  // Updating the single shared attribute deforms both meshes at once
+  // Deforms both solid and wireframe meshes simultaneously
   positionAttribute.needsUpdate = true;
   geometry.computeVertexNormals();
 
-  // Sync Rotations
-  const tiltX = currentT * 0.75;
-  const tiltY = currentT * 0.35;
+  // Rotational choreography with natural mouse parallax tilt
+  const baseTiltX = currentT * 0.72;
+  const baseTiltY = currentT * 0.36;
 
-  solidMesh.rotation.x = tiltX;
-  solidMesh.rotation.y = tiltY;
-  wireframeMesh.rotation.x = tiltX;
-  wireframeMesh.rotation.y = tiltY;
+  solidMesh.rotation.x = baseTiltX + mouseParallax.currentY;
+  solidMesh.rotation.y = baseTiltY + mouseParallax.currentX;
+  wireframeMesh.rotation.x = baseTiltX + mouseParallax.currentY;
+  wireframeMesh.rotation.y = baseTiltY + mouseParallax.currentX;
 
-  // Orbit key light
-  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2;
-  keyLight.position.y = 8 + Math.cos(currentT * Math.PI) * 2;
+  // Gentle light choreography tracking elevation
+  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2.2;
+  keyLight.position.y = 7 + Math.cos(currentT * Math.PI) * 1.8;
+
+  // Synchronize Hardware HUD
+  if (progressBarEl) {
+    progressBarEl.style.width = `${(currentT * 100).toFixed(1)}%`;
+  }
+
+  if (stageTitleEl) {
+    if (currentT < 0.33) {
+      stageTitleEl.textContent = '01 // 2D Harmonic Spline';
+    } else if (currentT < 0.66) {
+      stageTitleEl.textContent = '02 // Dual-Harmonic Swell';
+    } else {
+      stageTitleEl.textContent = '03 // Spatial Architecture';
+    }
+  }
+
+  if (dispValEl) {
+    dispValEl.textContent = `HARMONIC SWELL +${(currentT * 1.5).toFixed(1)}mm`;
+  }
+
+  if (surfaceValEl) {
+    surfaceValEl.textContent =
+      currentT > 0.45
+        ? 'ONYX CERAMIC · COMPOUND TOPOLOGY'
+        : 'ONYX CERAMIC · HYBRID MESH';
+  }
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// 7. Resize Handler
+// 9. Resize Handler
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
