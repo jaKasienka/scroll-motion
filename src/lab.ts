@@ -548,11 +548,15 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
 function applyScrollState(p: number): void {
   const linePhase = easeInOut(segment(p, 0.08, 0.22));
   const facePhase = easeInOut(segment(p, 0.2, 0.38));
   const depthPhase = easeInOut(segment(p, 0.36, 0.58));
-  const ctaPhase = easeInOut(segment(p, 0.6, 0.94));
+  const reliefPhase = smoothstep(segment(p, 0.58, 0.92));
 
   const lineHeight = THREE.MathUtils.lerp(0.05, DEVICE_H, linePhase);
   const faceW = THREE.MathUtils.lerp(LINE_DIAMETER, DEVICE_W, facePhase);
@@ -567,38 +571,37 @@ function applyScrollState(p: number): void {
   lineMesh.visible = linePhase > 0.02 && facePhase < 0.14;
   lineMesh.scale.set(lineWidthMatch, lineHeight, lineWidthMatch);
 
-  const frontZ = (DEVICE_D / 2) * (depth / DEVICE_D);
-  const ctaOut = ctaPhase ** 1.4;
-  const cutThrough = ctaOut;
+  // Exact front face position taking extruded bevel into account
+  const frontFaceZ = (DEVICE_D / 2 + DEVICE_BEVEL) * (depth / DEVICE_D);
+  const recessDepth = CAVITY_DEPTH * reliefPhase;
 
-  const showCut = cutThrough > 0.001;
+  const showCut = reliefPhase > 0.0001;
   bodySolid.visible = facePhase > 0 && !showCut;
   bodySolid.scale.copy(bodyScale);
   bodyFrame.visible = facePhase > 0 && showCut;
   bodyFrame.scale.copy(bodyScale);
 
   pocketGroup.visible = showCut;
-  const recessDepth = CAVITY_DEPTH * cutThrough;
-  pocketBack.position.set(0, CAVITY_CENTER_Y, frontZ - CAVITY_DEPTH - 0.06);
+  pocketBack.position.set(0, CAVITY_CENTER_Y, frontFaceZ - CAVITY_DEPTH - 0.08);
 
-  membraneVisibleAmount = cutThrough;
+  membraneVisibleAmount = reliefPhase;
   membraneGroup.visible = showCut;
-  membraneGroup.position.set(0, CAVITY_CENTER_Y, frontZ - recessDepth);
+  membraneGroup.position.set(0, CAVITY_CENTER_Y, frontFaceZ - recessDepth);
 
-  ctaGroup.position.z = frontZ;
-  ctaGroup.visible = ctaPhase > 0.02;
+  ctaGroup.position.z = frontFaceZ;
+  ctaGroup.visible = reliefPhase > 0.001;
 
-  ctaMesh.scale.z = Math.max(0.001, ctaOut);
+  ctaMesh.scale.z = Math.max(0.001, reliefPhase);
   ctaMesh.position.z =
-    THREE.MathUtils.lerp(-CTA_DEPTH * 0.85, CTA_DEPTH * 0.35, ctaOut) - ctaPressOffset.z;
+    THREE.MathUtils.lerp(-0.14, 0.05, reliefPhase) - ctaPressOffset.z;
 
   const shadowMat = ctaShadow.material as THREE.MeshBasicMaterial;
-  shadowMat.opacity = 0.24 * ctaOut;
-  ctaShadow.scale.set(1, 1, Math.max(0.001, ctaOut));
+  shadowMat.opacity = 0.24 * reliefPhase;
+  ctaShadow.scale.set(1, 1, Math.max(0.001, reliefPhase));
 
-  ctaInteractive = ctaOut > 0.92 && p > 0.82;
+  ctaInteractive = reliefPhase > 0.90 && p > 0.80;
 
-  const camBlend = easeInOut(segment(p, 0.32, 0.62));
+  const camBlend = easeInOut(segment(p, 0.32, 0.58));
   const holdAngle = 0.42;
   const angleX = THREE.MathUtils.lerp(0, holdAngle, camBlend);
   const angleY = THREE.MathUtils.lerp(0, 0.55, camBlend);
@@ -618,7 +621,7 @@ function applyScrollState(p: number): void {
   if (hudStageTitle) {
     if (p < 0.28) {
       hudStageTitle.textContent = '01 // LINEAR GENESIS';
-    } else if (p < 0.62) {
+    } else if (p < 0.58) {
       hudStageTitle.textContent = '02 // ROTATIONAL DEPTH';
     } else {
       hudStageTitle.textContent = '03 // ACOUSTIC MEMBRANE';
@@ -628,7 +631,7 @@ function applyScrollState(p: number): void {
   if (hudDispVal) {
     if (p < 0.28) {
       hudDispVal.textContent = '2D FLAT EXPANSION';
-    } else if (p < 0.62) {
+    } else if (p < 0.58) {
       hudDispVal.textContent = `EXTRUSION +${(depth * 10).toFixed(1)}mm`;
     } else {
       hudDispVal.textContent = `RELIEF SINK -${(recessDepth * 10).toFixed(1)}mm`;
@@ -650,7 +653,7 @@ if (deviceSection && devicePin) {
     end: 'bottom bottom',
     pin: devicePin,
     pinSpacing: true,
-    scrub: 2.2,
+    scrub: 1.4,
     anticipatePin: 1,
     invalidateOnRefresh: true,
     onUpdate: (self) => {
@@ -725,7 +728,7 @@ hudAudioCard?.addEventListener('keydown', (e: KeyboardEvent) => {
 function animate(): void {
   requestAnimationFrame(animate);
 
-  scrollProgress += (targetScrollProgress - scrollProgress) * 0.07;
+  scrollProgress += (targetScrollProgress - scrollProgress) * 0.12;
   applyScrollState(scrollProgress);
   updateMembrane();
 
