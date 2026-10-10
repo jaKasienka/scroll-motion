@@ -259,6 +259,7 @@ const membraneUniforms = {
   uAmp: { value: 0 },
   uWaveFront: { value: 0 },
   uCenterPin: { value: 0 },
+  uWaveOrigin: { value: new THREE.Vector2(0, 0) },
   uHw: { value: MEMBRANE_W * 0.5 },
   uHh: { value: MEMBRANE_H * 0.5 },
   uCornerR: { value: CORNER_R * (MEMBRANE_W / DEVICE_W) },
@@ -269,6 +270,7 @@ membraneMat.onBeforeCompile = (shader) => {
   shader.uniforms.uAmp = membraneUniforms.uAmp;
   shader.uniforms.uWaveFront = membraneUniforms.uWaveFront;
   shader.uniforms.uCenterPin = membraneUniforms.uCenterPin;
+  shader.uniforms.uWaveOrigin = membraneUniforms.uWaveOrigin;
   shader.uniforms.uHw = membraneUniforms.uHw;
   shader.uniforms.uHh = membraneUniforms.uHh;
   shader.uniforms.uCornerR = membraneUniforms.uCornerR;
@@ -282,9 +284,14 @@ membraneMat.onBeforeCompile = (shader) => {
     uniform float uAmp;
     uniform float uWaveFront;
     uniform float uCenterPin;
+    uniform vec2 uWaveOrigin;
     uniform float uHw;
     uniform float uHh;
     uniform float uCornerR;
+
+    varying float vWaveHeight;
+    varying float vWaveSlope;
+    varying vec2 vLocalPos;
 
     float getMembraneEnvelope(vec2 p) {
       vec2 q = abs(p) - vec2(uHw, uHh) + vec2(uCornerR);
@@ -295,7 +302,7 @@ membraneMat.onBeforeCompile = (shader) => {
 
     float getMembraneDisplacement(vec2 p) {
       if (uAmp < 0.00005) return 0.0;
-      float r = length(p);
+      float r = length(p - uWaveOrigin);
       float env = getMembraneEnvelope(p);
       float originReach = smoothstep(-0.02, 0.38, uWaveFront - r);
       float centerPin = exp(-r * r * 220.0) * uCenterPin;
@@ -314,6 +321,7 @@ membraneMat.onBeforeCompile = (shader) => {
     '#include <beginnormal_vertex>',
     `
     #include <beginnormal_vertex>
+    vLocalPos = position.xy;
     if (uAmp > 0.00005) {
       float eps = 0.006;
       float zC = getMembraneDisplacement(position.xy);
@@ -322,6 +330,12 @@ membraneMat.onBeforeCompile = (shader) => {
       vec3 vX = vec3(eps, 0.0, zX - zC);
       vec3 vY = vec3(0.0, eps, zY - zC);
       objectNormal = normalize(cross(vX, vY));
+
+      vWaveHeight = zC;
+      vWaveSlope = length(vec2(zX - zC, zY - zC)) / eps;
+    } else {
+      vWaveHeight = 0.0;
+      vWaveSlope = 0.0;
     }
     `
   );
@@ -331,6 +345,65 @@ membraneMat.onBeforeCompile = (shader) => {
     `
     #include <begin_vertex>
     transformed.z += getMembraneDisplacement(position.xy);
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <common>',
+    `
+    #include <common>
+
+    uniform float uAmp;
+    uniform float uHw;
+    uniform float uHh;
+
+    varying float vWaveHeight;
+    varying float vWaveSlope;
+    varying vec2 vLocalPos;
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <color_fragment>',
+    `
+    #include <color_fragment>
+
+    // Cavity perimeter contact occlusion vignette
+    vec2 qEdge = abs(vLocalPos) / vec2(uHw, uHh);
+    float edgeDist = max(qEdge.x, qEdge.y);
+    float cavityAO = 1.0 - smoothstep(0.70, 1.0, edgeDist) * 0.34;
+    diffuseColor.rgb *= cavityAO;
+
+    // Detect wave peaks: elevation above rest plane + surface tilt slope
+    float peakNorm = max(0.0, vWaveHeight) / max(0.0001, uAmp * 0.08);
+    float slopeNorm = clamp(vWaveSlope * 1.5, 0.0, 1.0);
+    float peakFactor = clamp(peakNorm * 1.1 + slopeNorm * 0.42, 0.0, 1.0);
+
+    // Keep wave peaks deep, rich dark black obsidian with pure reflection highlights (avoids silver washout)
+    vec3 blackShine = vec3(0.010, 0.010, 0.015);
+    diffuseColor.rgb = mix(diffuseColor.rgb, blackShine, peakFactor * 0.94);
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `
+    #include <roughnessmap_fragment>
+
+    // On wave peaks: polish roughness into a liquid mirror for razor-sharp specular reflection highlights
+    roughnessFactor = mix(roughnessFactor, 0.060, peakFactor * 0.86);
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <lights_physical_fragment>',
+    `
+    #include <lights_physical_fragment>
+
+    #ifdef USE_SHEEN
+    // Suppress diffuse silver sheen on wave peaks so reflections remain crisp and dark-bodied
+    material.sheenColor *= (1.0 - peakFactor * 0.96);
+    #endif
     `
   );
 };
@@ -360,7 +433,16 @@ const MEMBRANE_PULSE_DURATION = 3.2;
 
 let audioContext: AudioContext | null = null;
 let noiseBuffer: AudioBuffer | null = null;
+let audioAnalyser: AnalyserNode | null = null;
+const audioFreqData = new Uint8Array(32);
 const activeSoundStops: Array<() => void> = [];
+
+const eqBars = [
+  document.querySelector('.eq-bar.bar-1') as HTMLElement | null,
+  document.querySelector('.eq-bar.bar-2') as HTMLElement | null,
+  document.querySelector('.eq-bar.bar-3') as HTMLElement | null,
+  document.querySelector('.eq-bar.bar-4') as HTMLElement | null,
+];
 
 function ensureAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -369,6 +451,11 @@ function ensureAudioContext(): AudioContext | null {
   }
   if (audioContext.state === 'suspended') {
     void audioContext.resume();
+  }
+  if (!audioAnalyser && audioContext) {
+    audioAnalyser = audioContext.createAnalyser();
+    audioAnalyser.fftSize = 64;
+    audioAnalyser.smoothingTimeConstant = 0.72;
   }
   if (!noiseBuffer && audioContext) {
     const seconds = 4;
@@ -404,6 +491,10 @@ function playMembraneSound(duration = MEMBRANE_PULSE_DURATION): void {
   master.gain.exponentialRampToValueAtTime(0.42, now + 0.05);
   master.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   master.connect(ctx.destination);
+
+  if (audioAnalyser) {
+    master.connect(audioAnalyser);
+  }
 
   const noise = ctx.createBufferSource();
   noise.buffer = noiseBuffer;
@@ -503,11 +594,20 @@ function updateAudioCardUI(isPlaying: boolean): void {
   }
 }
 
-function triggerMembranePulse(): void {
+function triggerMembranePulse(origin = new THREE.Vector2(0, 0)): void {
   gsap.killTweensOf(membraneDriver);
   membraneTime = 0;
   membraneDriver.energy = 1;
+  membraneUniforms.uWaveOrigin.value.copy(origin);
   updateAudioCardUI(true);
+
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate([18, 30, 10, 20, 6]);
+    } catch {
+      /* ignore */
+    }
+  }
 
   try {
     playMembraneSound(MEMBRANE_PULSE_DURATION);
@@ -707,6 +807,14 @@ if (deviceSection && devicePin) {
 
 const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+const mouseParallax = { targetX: 0, targetY: 0, currentX: 0, currentY: 0 };
+
+window.addEventListener('pointermove', (e: PointerEvent) => {
+  const normX = (e.clientX / window.innerWidth) * 2 - 1;
+  const normY = (e.clientY / window.innerHeight) * 2 - 1;
+  mouseParallax.targetX = normX * 0.052;
+  mouseParallax.targetY = normY * 0.036;
+});
 
 function onPointerDown(event: PointerEvent): void {
   if (!ctaInteractive) return;
@@ -717,10 +825,17 @@ function onPointerDown(event: PointerEvent): void {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObject(ctaMesh, false);
+  const hits = raycaster.intersectObjects([ctaMesh, membraneMesh], false);
   if (hits.length > 0) {
-    triggerMembranePulse();
-    pressCtaPill();
+    const hit = hits[0];
+    if (hit.object === ctaMesh) {
+      triggerMembranePulse(new THREE.Vector2(0, -0.3));
+      pressCtaPill();
+    } else {
+      // Local coordinate on membrane plane for localized wave propagation
+      const local = membraneMesh.worldToLocal(hit.point.clone());
+      triggerMembranePulse(new THREE.Vector2(local.x, local.y));
+    }
   }
 }
 
@@ -735,18 +850,18 @@ renderer.domElement.addEventListener('pointermove', (event: PointerEvent) => {
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObject(ctaMesh, false);
+  const hits = raycaster.intersectObjects([ctaMesh, membraneMesh], false);
   renderer.domElement.style.cursor = hits.length > 0 ? 'pointer' : 'default';
 });
 
 function onAudioBadgeClick(): void {
   ensureAudioContext();
   if (ctaInteractive) {
-    triggerMembranePulse();
+    triggerMembranePulse(new THREE.Vector2(0, -0.3));
     pressCtaPill();
   } else if (deviceSection) {
     const maxScroll = deviceSection.offsetHeight - window.innerHeight;
-    const targetY = deviceSection.offsetTop + maxScroll * 0.88;
+    const targetY = deviceSection.offsetTop + maxScroll;
     const scrollObj = { y: window.scrollY };
     gsap.to(scrollObj, {
       y: targetY,
@@ -773,6 +888,32 @@ function animate(): void {
   scrollProgress += (targetScrollProgress - scrollProgress) * 0.12;
   applyScrollState(scrollProgress);
   updateMembrane();
+
+  // Subtle interactive 3D mouse parallax tilt (follows cursor on X and Y)
+  mouseParallax.currentX += (mouseParallax.targetX - mouseParallax.currentX) * 0.06;
+  mouseParallax.currentY += (mouseParallax.targetY - mouseParallax.currentY) * 0.06;
+  const tiltFactor = smoothstep(segment(scrollProgress, 0.40, 0.65));
+  deviceRoot.rotation.y = mouseParallax.currentX * tiltFactor;
+  deviceRoot.rotation.x = mouseParallax.currentY * tiltFactor;
+
+  // Real-time audio reactive EQ bars
+  if (audioAnalyser && membraneDriver.energy > 0.005) {
+    audioAnalyser.getByteFrequencyData(audioFreqData);
+    const b1 = Math.max(3, (audioFreqData[1] / 255) * 16);
+    const b2 = Math.max(4, (audioFreqData[3] / 255) * 16);
+    const b3 = Math.max(3, (audioFreqData[6] / 255) * 16);
+    const b4 = Math.max(2, (audioFreqData[10] / 255) * 16);
+
+    if (eqBars[0]) eqBars[0].style.height = `${b1.toFixed(1)}px`;
+    if (eqBars[1]) eqBars[1].style.height = `${b2.toFixed(1)}px`;
+    if (eqBars[2]) eqBars[2].style.height = `${b3.toFixed(1)}px`;
+    if (eqBars[3]) eqBars[3].style.height = `${b4.toFixed(1)}px`;
+  } else if (eqBars[0] && !membraneDriver.energy) {
+    if (eqBars[0].style.height) eqBars[0].style.height = '';
+    if (eqBars[1] && eqBars[1].style.height) eqBars[1].style.height = '';
+    if (eqBars[2] && eqBars[2].style.height) eqBars[2].style.height = '';
+    if (eqBars[3] && eqBars[3].style.height) eqBars[3].style.height = '';
+  }
 
   renderer.render(scene, camera);
 }
