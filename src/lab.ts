@@ -226,29 +226,33 @@ const pocketBack = extrude(
 );
 pocketGroup.add(pocketBack);
 
-function silkyMembraneMaterial(): THREE.MeshPhysicalMaterial {
+const COLOR_BLACK = new THREE.Color(BLACK);
+const COLOR_GREY_SILK = new THREE.Color(0x1a1a24);
+const SHEEN_SILK = new THREE.Color(0x787e92);
+
+function createMembraneMaterial(): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
-    color: 0x14141c,
-    roughness: 0.22,
-    metalness: 0.26,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.18,
-    sheen: 1.0,
-    sheenColor: new THREE.Color(0xb8c0d4),
-    sheenRoughness: 0.32,
-    iridescence: 0.26,
+    color: COLOR_BLACK.clone(),
+    roughness: 0.14,
+    metalness: 0.20,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.05,
+    sheen: 0.0,
+    sheenColor: SHEEN_SILK.clone(),
+    sheenRoughness: 0.36,
+    iridescence: 0.0,
     iridescenceIOR: 1.33,
-    reflectivity: 0.92,
+    reflectivity: 0.95,
   });
 }
 
 const membraneGroup = new THREE.Group();
 deviceRoot.add(membraneGroup);
 
-const MEMBRANE_W = CAVITY_W * 0.98;
-const MEMBRANE_H = CAVITY_H * 0.98;
+const MEMBRANE_W = CAVITY_W;
+const MEMBRANE_H = CAVITY_H;
 const membraneGeo = new THREE.PlaneGeometry(MEMBRANE_W, MEMBRANE_H, 128, 128);
-const membraneMat = silkyMembraneMaterial();
+const membraneMat = createMembraneMaterial();
 
 const membraneUniforms = {
   uTime: { value: 0 },
@@ -289,14 +293,6 @@ membraneMat.onBeforeCompile = (shader) => {
       return 1.0 - smoothstep(-fadeWidth, 0.0, dist);
     }
 
-    float getRestingDish(vec2 p) {
-      float r = length(p);
-      float env = getMembraneEnvelope(p);
-      // Subtle acoustic saucer dish: curves gently by ~0.022 in center, fading smoothly at the boundary
-      float dish = (cos(min(r * 1.6, 3.14159265)) - 1.0) * 0.022;
-      return dish * env;
-    }
-
     float getMembraneDisplacement(vec2 p) {
       if (uAmp < 0.00005) return 0.0;
       float r = length(p);
@@ -311,10 +307,6 @@ membraneMat.onBeforeCompile = (shader) => {
 
       return radialWave * uAmp * env;
     }
-
-    float getTotalDisplacement(vec2 p) {
-      return getRestingDish(p) + getMembraneDisplacement(p);
-    }
     `
   );
 
@@ -322,13 +314,15 @@ membraneMat.onBeforeCompile = (shader) => {
     '#include <beginnormal_vertex>',
     `
     #include <beginnormal_vertex>
-    float eps = 0.006;
-    float zC = getTotalDisplacement(position.xy);
-    float zX = getTotalDisplacement(position.xy + vec2(eps, 0.0));
-    float zY = getTotalDisplacement(position.xy + vec2(0.0, eps));
-    vec3 vX = vec3(eps, 0.0, zX - zC);
-    vec3 vY = vec3(0.0, eps, zY - zC);
-    objectNormal = normalize(cross(vX, vY));
+    if (uAmp > 0.00005) {
+      float eps = 0.006;
+      float zC = getMembraneDisplacement(position.xy);
+      float zX = getMembraneDisplacement(position.xy + vec2(eps, 0.0));
+      float zY = getMembraneDisplacement(position.xy + vec2(0.0, eps));
+      vec3 vX = vec3(eps, 0.0, zX - zC);
+      vec3 vY = vec3(0.0, eps, zY - zC);
+      objectNormal = normalize(cross(vX, vY));
+    }
     `
   );
 
@@ -336,7 +330,7 @@ membraneMat.onBeforeCompile = (shader) => {
     '#include <begin_vertex>',
     `
     #include <begin_vertex>
-    transformed.z += getTotalDisplacement(position.xy);
+    transformed.z += getMembraneDisplacement(position.xy);
     `
   );
 };
@@ -618,6 +612,15 @@ function applyScrollState(p: number): void {
   membraneGroup.visible = showCut;
   membraneGroup.position.set(0, CAVITY_CENTER_Y, frontFaceZ - recessDepth);
 
+  // Smoothly morph membrane material from regular black ceramic to shaded grey silky as it sinks
+  membraneMat.color.lerpColors(COLOR_BLACK, COLOR_GREY_SILK, sinkPhase);
+  membraneMat.roughness = THREE.MathUtils.lerp(0.14, 0.24, sinkPhase);
+  membraneMat.metalness = THREE.MathUtils.lerp(0.20, 0.18, sinkPhase);
+  membraneMat.clearcoat = THREE.MathUtils.lerp(1.0, 0.50, sinkPhase);
+  membraneMat.clearcoatRoughness = THREE.MathUtils.lerp(0.05, 0.16, sinkPhase);
+  membraneMat.sheen = THREE.MathUtils.lerp(0.0, 0.55, sinkPhase);
+  membraneMat.iridescence = THREE.MathUtils.lerp(0.0, 0.16, sinkPhase);
+
   ctaGroup.position.z = frontFaceZ;
   ctaGroup.visible = buttonPhase > 0.001;
 
@@ -670,10 +673,10 @@ function applyScrollState(p: number): void {
   }
 
   if (hudSurfaceVal) {
-    if (p < 0.56) {
+    if (sinkPhase < 0.12) {
       hudSurfaceVal.textContent = 'ONYX CERAMIC · CLEARCOAT 1.0';
     } else {
-      hudSurfaceVal.textContent = 'ACOUSTIC SILK · SHEEN TRANSDUCER';
+      hudSurfaceVal.textContent = 'GREY SILK · SHEEN TRANSDUCER';
     }
   }
 
