@@ -119,23 +119,26 @@ wireframeMesh.scale.set(1.0015, 1.0015, 1.0015);
 meshGroup.add(wireframeMesh);
 
 // C. Interior Telescope Optical Baffles & End Bevel Rings
-// Six concentric metallic rib rings inside the barrel to create authentic astronomical tube reflections
+// Concentric metallic rib rings inside the barrel to create authentic astronomical tube reflections
 const baffleGroup = new THREE.Group();
+baffleGroup.position.set(SHEET_WIDTH * 0.5, 0, TUBE_RADIUS);
+baffleGroup.visible = false; // Appears only after looking through the telescope
 meshGroup.add(baffleGroup);
-baffleGroup.visible = false; // Becomes visible as cylinder rolls closed
 
 const baffleMaterial = new THREE.MeshStandardMaterial({
   color: 0x222228,
-  metalness: 0.7,
+  metalness: 0.75,
   roughness: 0.35,
   side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0.0,
 });
 
 const baffleCount = 7;
 for (let i = 0; i < baffleCount; i++) {
   // Tube axis is along Y before gimbal pitch
   const yPos = -SHEET_HEIGHT * 0.42 + (i / (baffleCount - 1)) * (SHEET_HEIGHT * 0.84);
-  const ringGeo = new THREE.RingGeometry(TUBE_RADIUS * 0.91, TUBE_RADIUS * 0.985, 48);
+  const ringGeo = new THREE.RingGeometry(TUBE_RADIUS * 0.90, TUBE_RADIUS * 0.985, 64);
   const ringMesh = new THREE.Mesh(ringGeo, baffleMaterial);
   ringMesh.rotation.x = Math.PI / 2;
   ringMesh.position.set(0, yPos, 0);
@@ -239,7 +242,7 @@ const mandelbrotUniforms = {
   uAspect: { value: window.innerWidth / window.innerHeight },
   uMaxIterations: { value: 120 },
   uPaletteShift: { value: 0.0 },
-  uOpacity: { value: 1.0 },
+  uOpacity: { value: 0.0 },
   uIsCircular: { value: true },
 };
 
@@ -251,16 +254,17 @@ const lensMaterial = new THREE.ShaderMaterial({
   uniforms: {
     ...mandelbrotUniforms,
     uIsCircular: { value: true },
-    uOpacity: { value: 1.0 },
+    uOpacity: { value: 0.0 },
   },
   side: THREE.DoubleSide,
   transparent: true,
 });
 
 const lensMesh = new THREE.Mesh(lensGeometry, lensMaterial);
-// Far end is at y = -SHEET_HEIGHT/2 before gimbal pitch
+// Far end is at y = -SHEET_HEIGHT/2 before gimbal pitch, perfectly concentric with cylinder axis
 lensMesh.rotation.x = Math.PI / 2;
-lensMesh.position.set(0, -SHEET_HEIGHT * 0.495, 0);
+lensMesh.position.set(SHEET_WIDTH * 0.5, -SHEET_HEIGHT * 0.495, TUBE_RADIUS);
+lensMesh.visible = false;
 meshGroup.add(lensMesh);
 
 // 2. Fullscreen Fractal Quad for Deep Infinite Zoom Stage
@@ -496,10 +500,6 @@ function animate(): void {
   meshGroup.position.x = - (SHEET_WIDTH * 0.5) * rollAlpha;
   meshGroup.position.z = - TUBE_RADIUS * rollAlpha;
 
-  // Optical baffle rings emerge as cylinder closes
-  baffleGroup.visible = rollAlpha > 0.45;
-  baffleMaterial.opacity = Math.max(0, (rollAlpha - 0.45) / 0.55);
-
   // --------------------------------------------------------------------------
   // Phase 2: Telescope Gimbal Orientation into Central Perspective (p: 0.28 -> 0.44)
   // --------------------------------------------------------------------------
@@ -523,12 +523,12 @@ function animate(): void {
   tubeGroup.rotation.y = curRotY + mouse.currentX * 0.10 * parallaxDamping;
 
   // --------------------------------------------------------------------------
-  // Phase 3: Bore Traversal / Dolly Down the Telescope Barrel (p: 0.44 -> 0.64)
+  // Phase 3: Bore Traversal & Ring / Fractal Appearance (p: 0.44 -> 0.65)
   // --------------------------------------------------------------------------
   // Tube length = SHEET_HEIGHT = 6.0.
   // Front circular mouth is at z = +3.0. Far lens aperture is at z = -3.0.
   // Camera moves from z = 10.0 forward to z = -2.86 (just 14cm short of the far lens!).
-  const dollySegment = segment(p, 0.44, 0.64);
+  const dollySegment = segment(p, 0.44, 0.65);
   const dollyAlpha = smoothstep(dollySegment);
 
   const startCamZ = 10.0;
@@ -537,6 +537,28 @@ function animate(): void {
   camera.position.z = curCamZ;
   headlight.position.z = curCamZ;
 
+  // Baffle Rings: appear only AFTER looking through the telescope (p >= 0.44)
+  if (p < 0.44) {
+    baffleGroup.visible = false;
+    baffleMaterial.opacity = 0.0;
+  } else {
+    baffleGroup.visible = true;
+    const baffleFade = smoothstep(segment(p, 0.44, 0.52));
+    baffleMaterial.opacity = baffleFade * 0.85;
+  }
+
+  // Fractal Lens: starts subtle and reaches FULL 1.0 OPACITY after scrolling inside the tube
+  let currentLensOpacity = 0.0;
+  if (p < 0.42) {
+    lensMesh.visible = false;
+    currentLensOpacity = 0.0;
+  } else {
+    lensMesh.visible = true;
+    // Ramps smoothly from 0.0 at p=0.44 to FULL 1.0 opacity by p=0.60
+    currentLensOpacity = smoothstep(segment(p, 0.44, 0.60));
+  }
+  lensMaterial.uniforms.uOpacity.value = currentLensOpacity;
+
   // --------------------------------------------------------------------------
   // Phase 4: Mandelbrot Horizon & Deep Infinite Zoom (p: 0.60 -> 1.00)
   // --------------------------------------------------------------------------
@@ -544,7 +566,7 @@ function animate(): void {
   const fractalAlpha = smoothstep(fractalSegment);
 
   // Fullscreen portal cross-fades seamlessly as camera reaches the end of the tube
-  const quadFadeIn = smoothstep(segment(p, 0.62, 0.68));
+  const quadFadeIn = smoothstep(segment(p, 0.63, 0.68));
   quadUniforms.uOpacity.value = quadFadeIn;
 
   // Exponential zoom into Seahorse Valley triple spiral
@@ -586,7 +608,7 @@ function animate(): void {
       stageTitleEl.textContent = '01 // PLANAR TO CYLINDER ROLL';
     } else if (p < 0.44) {
       stageTitleEl.textContent = '02 // CENTRAL TELESCOPE GIMBAL';
-    } else if (p < 0.64) {
+    } else if (p < 0.65) {
       stageTitleEl.textContent = '03 // BARREL BORE TRAVERSAL';
     } else {
       stageTitleEl.textContent = '04 // DEEP FRACTAL SINGULARITY';
@@ -599,8 +621,8 @@ function animate(): void {
       geomValEl.textContent = `ROLL FORMING: ${rolledPct}% (R=${TUBE_RADIUS.toFixed(2)}m)`;
     } else if (p < 0.44) {
       geomValEl.textContent = `CYLINDRICAL TUBE (R=${TUBE_RADIUS.toFixed(2)}m · L=6.0m)`;
-    } else if (p < 0.64) {
-      geomValEl.textContent = 'INTERNAL BORE OPTICS · BAFFLE RING ALIGNED';
+    } else if (p < 0.65) {
+      geomValEl.textContent = 'INTERNAL BORE OPTICS · CONCENTRIC BAFFLES';
     } else {
       geomValEl.textContent = 'MANDELBROT SET · SEAHORSE VALLEY';
     }
@@ -612,7 +634,7 @@ function animate(): void {
     } else if (p < 0.44) {
       const deg = (gimbalAlpha * 90).toFixed(0);
       trajValEl.textContent = `GIMBAL PITCH: ${deg}\u00B0 CENTRAL ALIGNMENT`;
-    } else if (p < 0.64) {
+    } else if (p < 0.65) {
       const distToFar = Math.max(0.14, curCamZ - (-3.0));
       trajValEl.textContent = `BORE PROXIMITY: ${distToFar.toFixed(2)}m TO APERTURE`;
     } else {
@@ -621,10 +643,11 @@ function animate(): void {
   }
 
   if (zoomValEl) {
-    if (p < 0.50) {
+    if (p < 0.44) {
       zoomValEl.textContent = 'OPTICAL APERTURE: INACTIVE';
-    } else if (p < 0.64) {
-      zoomValEl.textContent = `APERTURE PROXIMITY: ${(dollyAlpha * 100).toFixed(0)}%`;
+    } else if (p < 0.65) {
+      const pct = (currentLensOpacity * 100).toFixed(0);
+      zoomValEl.textContent = `FRACTAL HORIZON: ${pct}% OPACITY`;
     } else {
       let zoomStr = '';
       if (zoomFactor < 1000) {
