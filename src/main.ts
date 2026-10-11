@@ -12,12 +12,12 @@ const scene: THREE.Scene = new THREE.Scene();
 scene.background = new THREE.Color(0x242428);
 
 const camera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera(
-  42,
+  45,
   window.innerWidth / window.innerHeight,
   0.1,
   1000
 );
-camera.position.set(0, 0, 9.5);
+camera.position.set(0, 0, 10);
 
 const renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -54,11 +54,11 @@ const frontSpecLight = new THREE.DirectionalLight(0xffffff, 1.0);
 frontSpecLight.position.set(0, 0, 8);
 scene.add(frontSpecLight);
 
-// 3. Parametric Geometry
-const width = 8.5;
-const height = 4.6;
-const segmentsX = 110;
-const segmentsY = 60;
+// 3. Parametric Geometry (Restored from commit 1d9c818)
+const width = 8;
+const height = 4;
+const segmentsX = 100;
+const segmentsY = 50;
 
 const geometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(
   width,
@@ -100,8 +100,8 @@ const wireframeMaterial = new THREE.MeshBasicMaterial({
 });
 
 const wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
-wireframeMesh.scale.set(1.001, 1.001, 1.001);
-wireframeMesh.position.z = 0.004;
+wireframeMesh.scale.set(1.002, 1.002, 1.002);
+wireframeMesh.position.z = 0.005;
 scene.add(wireframeMesh);
 
 // 5. HUD References
@@ -164,46 +164,34 @@ function animate(): void {
 
   const currentPositions = positionAttribute.array as Float32Array;
 
-  // Harmonic Wave Formula (Restored previous sine/cosine cross-topology with enhanced harmonics & edge decay)
-  const halfW = width * 0.5;
-  const halfH = height * 0.5;
-
+  // Mathematical sine/cosine harmonic wave loop from commit 1d9c818
   for (let i = 0; i < currentPositions.length; i += 3) {
     const x = originalPositions[i];
     const y = originalPositions[i + 1];
 
-    // Orthogonal and diagonal harmonic wave components
-    const primaryWave = Math.sin(x * 1.45 + currentT * Math.PI * 2.2) * 0.72;
-    const secondaryWave = Math.cos(y * 2.2 + currentT * Math.PI * 1.8) * 0.38;
-    const diagonalInterference = Math.sin((x * 0.9 + y * 1.25) * 2.1 + currentT * Math.PI * 2.8) * 0.22;
-    const microRipple = Math.sin((x * 2.2 - y * 1.8) * 2.6 + currentT * Math.PI * 3.4) * 0.08;
+    const primaryWave = Math.sin(x * 1.5 + currentT * Math.PI * 2) * 0.7;
+    const secondaryWave = Math.cos(y * 2.5 + currentT * Math.PI) * 0.35;
+    const microRipple = Math.sin((x + y) * 3 + currentT * Math.PI * 3) * 0.15;
 
-    // Architectural perimeter cosine falloff to keep edges elegant
-    const normX = Math.min(1, Math.abs(x) / halfW);
-    const normY = Math.min(1, Math.abs(y) / halfH);
-    const edgeDecay = Math.cos(normX * (Math.PI * 0.44)) * Math.cos(normY * (Math.PI * 0.44));
-
-    const waveHeight = (primaryWave + secondaryWave + diagonalInterference + microRipple) * Math.max(0, edgeDecay);
-
-    currentPositions[i + 2] = waveHeight * currentT;
+    currentPositions[i + 2] = (primaryWave + secondaryWave + microRipple) * currentT;
   }
 
   // Deforms both solid and wireframe meshes simultaneously
   positionAttribute.needsUpdate = true;
   geometry.computeVertexNormals();
 
-  // Rotational choreography with natural mouse parallax tilt
-  const baseTiltX = currentT * 0.72;
-  const baseTiltY = currentT * 0.36;
+  // Rotational choreography with natural mouse parallax tilt (from 1d9c818: tiltX = 0.75, tiltY = 0.35)
+  const tiltX = currentT * 0.75;
+  const tiltY = currentT * 0.35;
 
-  solidMesh.rotation.x = baseTiltX + mouseParallax.currentY;
-  solidMesh.rotation.y = baseTiltY + mouseParallax.currentX;
-  wireframeMesh.rotation.x = baseTiltX + mouseParallax.currentY;
-  wireframeMesh.rotation.y = baseTiltY + mouseParallax.currentX;
+  solidMesh.rotation.x = tiltX + mouseParallax.currentY;
+  solidMesh.rotation.y = tiltY + mouseParallax.currentX;
+  wireframeMesh.rotation.x = tiltX + mouseParallax.currentY;
+  wireframeMesh.rotation.y = tiltY + mouseParallax.currentX;
 
-  // Gentle light choreography tracking elevation
-  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2.2;
-  keyLight.position.y = 7 + Math.cos(currentT * Math.PI) * 1.8;
+  // Orbit key light (from 1d9c818)
+  keyLight.position.x = 6 + Math.sin(currentT * Math.PI) * 2;
+  keyLight.position.y = 8 + Math.cos(currentT * Math.PI) * 2;
 
   // Synchronize Hardware HUD
   if (progressBarEl) {
@@ -221,7 +209,7 @@ function animate(): void {
   }
 
   if (dispValEl) {
-    dispValEl.textContent = `HARMONIC SWELL +${(currentT * 1.5).toFixed(1)}mm`;
+    dispValEl.textContent = `HARMONIC SWELL +${(currentT * 1.2).toFixed(1)}mm`;
   }
 
   if (surfaceValEl) {
