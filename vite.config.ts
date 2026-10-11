@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(rootDir, 'index.html'),
         lab: resolve(rootDir, 'lab.html'),
+        telescope: resolve(rootDir, 'telescope.html'),
       },
     },
   },

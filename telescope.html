@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cylindrical Telescope & Fractal Horizon · Morph Studio</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      background: #242428;
+      color: #ffffff;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Minimalist Hardware Navigation */
+    .site-nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 30;
+      display: flex;
+      gap: 1.25rem;
+      padding: 1.25rem 1.75rem;
+      pointer-events: auto;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    }
+
+    .site-nav a {
+      color: #71717a;
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+
+    .site-nav a:hover {
+      color: #f4f4f5;
+    }
+
+    .site-nav a[aria-current="page"] {
+      color: #d4d4d8;
+      font-weight: 600;
+    }
+
+    /* Outer Scroll Track */
+    .telescope-section {
+      position: relative;
+      height: 900vh;
+      width: 100%;
+    }
+
+    /* Pinned Viewport Container */
+    .sticky-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Minimalist Hardware HUD Layer */
+    .hud-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2.25rem 2.5rem;
+      user-select: none;
+    }
+
+    .hud-panel {
+      pointer-events: none;
+    }
+
+    .hud-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 0.35rem;
+    }
+
+    .hud-eyebrow-accent {
+      width: 6px;
+      height: 6px;
+      background: #71717a;
+      border-radius: 50%;
+    }
+
+    .hud-stage-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #f4f4f5;
+      text-transform: uppercase;
+      transition: color 0.3s ease;
+    }
+
+    .hud-progress-container {
+      width: 160px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      margin-top: 0.75rem;
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .hud-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #e4e4e7;
+      transition: width 0.08s linear;
+    }
+
+    .hud-bottom-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1.5rem;
+    }
+
+    .hud-bottom-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+    }
+
+    .hud-data-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .hud-tag {
+      color: #71717a;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      min-width: 96px;
+    }
+
+    .hud-val {
+      color: #d4d4d8;
+      font-weight: 500;
+    }
+
+    /* Interactive Audio / Info Badges */
+    .hud-bottom-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      pointer-events: auto;
+    }
+
+    .hud-action-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.75rem 1.15rem;
+      background: rgba(18, 18, 22, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      text-decoration: none;
+      cursor: pointer;
+      color: inherit;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    .hud-action-badge:hover {
+      background: rgba(28, 28, 34, 0.85);
+      border-color: rgba(255, 255, 255, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .hud-badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #71717a;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hud-action-badge.active .hud-badge-dot {
+      background: #e4e4e7;
+      box-shadow: 0 0 10px rgba(228, 228, 231, 0.8);
+    }
+
+    .hud-badge-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .hud-badge-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #e4e4e7;
+    }
+
+    .hud-badge-sub {
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      color: #a1a1aa;
+    }
+
+    /* Seamless Editorial Transition to Next Experiment */
+    .transition-section {
+      position: relative;
+      z-index: 3;
+      min-height: 80vh;
+      background-color: #242428;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 5rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    .transition-card {
+      max-width: 580px;
+      padding: 3rem 2.5rem;
+      background: rgba(18, 18, 22, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .transition-eyebrow {
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 0.75rem;
+    }
+
+    .transition-title {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #f4f4f5;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .transition-desc {
+      font-size: 0.8rem;
+      line-height: 1.6;
+      letter-spacing: 0.03em;
+      color: #a1a1aa;
+      margin-bottom: 2rem;
+    }
+
+    .transition-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .transition-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.6rem;
+      background: #f4f4f5;
+      color: #0e0e12;
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 9999px;
+      transition: all 0.25s ease;
+    }
+
+    .transition-cta:hover {
+      background: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 255, 255, 0.15);
+    }
+
+    .transition-cta.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e4e4e7;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .transition-cta.secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    @media (max-width: 640px) {
+      .hud-layer {
+        padding: 1.5rem 1.25rem;
+      }
+      .hud-stage-title {
+        font-size: 1rem;
+      }
+      .hud-bottom-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+      .hud-bottom-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .transition-section {
+        padding: 3rem 1.25rem;
+      }
+      .transition-card {
+        padding: 2rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="site-nav" aria-label="Site">
+    <a href="/index.html">Morph</a>
+    <a href="/lab.html">Lab</a>
+    <a href="/telescope.html" aria-current="page">Telescope</a>
+  </nav>
+
+  <!-- Pinned 900vh Outer Scroll Section -->
+  <section class="telescope-section">
+    <div class="sticky-container">
+      <div id="canvas-container"></div>
+
+      <!-- Minimalist Hardware HUD Layer -->
+      <div class="hud-layer">
+        <div class="hud-panel hud-top-left">
+          <div class="hud-eyebrow">
+            <span class="hud-eyebrow-accent" aria-hidden="true"></span>
+            <span id="hud-eyebrow-text">CYLINDRICAL KINEMATICS // M-02</span>
+          </div>
+          <div class="hud-stage-title" id="hud-stage-title">01 // PLANAR TO CYLINDER ROLL</div>
+          <div class="hud-progress-container" aria-hidden="true">
+            <div class="hud-progress-bar" id="hud-progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="hud-bottom-row">
+          <div class="hud-panel hud-bottom-left">
+            <div class="hud-data-row">
+              <span class="hud-tag">TOPOLOGY</span>
+              <span class="hud-val" id="hud-geom-val">PLANAR SHEET (8.0m &times; 6.0m)</span>
+            </div>
+            <div class="hud-data-row">
+              <span class="hud-tag">TRAJECTORY</span>
+              <span class="hud-val" id="hud-traj-val">ROLL CURVATURE: &kappa; = 0.00</span>
+            </div>
+            <div class="hud-data-row">
+              <span class="hud-tag">SINGULARITY</span>
+              <span class="hud-val" id="hud-zoom-val">OPTICAL APERTURE: INACTIVE</span>
+            </div>
+          </div>
+
+          <div class="hud-bottom-right">
+            <button class="hud-action-badge" id="hud-audio-btn" aria-label="Toggle Acoustic Resonance">
+              <div class="hud-badge-dot" aria-hidden="true"></div>
+              <div class="hud-badge-info">
+                <div class="hud-badge-label" id="hud-audio-label">ACOUSTIC DRONE</div>
+                <div class="hud-badge-sub" id="hud-audio-sub">TAP TO SYNTHESIZE</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Seamless Transition Section -->
+  <section class="transition-section">
+    <div class="transition-card">
+      <div class="transition-eyebrow">EXPLORATION COMPLETE // M-02</div>
+      <h2 class="transition-title">Fractal Infinity Unfolded</h2>
+      <p class="transition-desc">
+        From a flat Euclidean ceramic sheet into a rolled cylindrical telescope barrel, plunging into the infinite self-similar boundary of the Mandelbrot set.
+      </p>
+      <div class="transition-buttons">
+        <a href="/index.html" class="transition-cta">
+          <span>&larr; Topology Morph</span>
+        </a>
+        <a href="/lab.html" class="transition-cta secondary">
+          <span>Device Relief Lab &rarr;</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="src/telescope.ts"></script>
+</body>
+</html>
