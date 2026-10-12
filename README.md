@@ -2,7 +2,7 @@
 
 A suite of interactive, high-precision 3D WebGL and scroll-driven kinematics experiments built with **Three.js**, **GSAP ScrollTrigger**, custom **GLSL Shaders**, and **TypeScript**.
 
-Live Demo: [scroll-motion.vercel.app](https://scroll-motion.vercel.app) *(or your deployed Vercel URL)*
+Live Demo: [https://parametric-morph.vercel.app](https://parametric-morph.vercel.app)
 
 ---
 
